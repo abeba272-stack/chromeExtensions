@@ -1,5 +1,5 @@
 (function () {
-  if (window.__BROKEN_WEBSITE_DETECTOR_LOADED__) {
+  if (window.__BROKEN_WEBSITE_DETECTOR_ANALYZE__) {
     return;
   }
 
@@ -740,21 +740,14 @@
     };
   }
 
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message?.type !== "BWD_ANALYZE_PAGE") {
-      return false;
-    }
-
+  window.__BROKEN_WEBSITE_DETECTOR_ANALYZE__ = function analyzePageForExtension() {
     try {
-      const data = buildSnapshot();
-      sendResponse({ ok: true, data });
+      return { ok: true, data: buildSnapshot() };
     } catch (error) {
-      sendResponse({
+      return {
         ok: false,
         error: error && error.message ? error.message : "page_analysis_failed"
-      });
+      };
     }
-
-    return true;
-  });
+  };
 })();

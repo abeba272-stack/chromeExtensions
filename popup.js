@@ -146,16 +146,26 @@ async function analyzeActiveTab(forceRefresh = false) {
       files: ["content.js"]
     });
 
-    const response = await chrome.tabs.sendMessage(currentTab.id, {
-      type: "BWD_ANALYZE_PAGE"
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: currentTab.id },
+      func: () => {
+        if (typeof window.__BROKEN_WEBSITE_DETECTOR_ANALYZE__ !== "function") {
+          return {
+            ok: false,
+            error: "The page analyzer did not load correctly."
+          };
+        }
+
+        return window.__BROKEN_WEBSITE_DETECTOR_ANALYZE__();
+      }
     });
 
-    if (!response?.ok || !response.data) {
-      throw new Error(response?.error || "The page did not return a readable analysis.");
+    if (!result?.ok || !result.data) {
+      throw new Error(result?.error || "The page did not return a readable analysis.");
     }
 
-    const linkValidation = await validateLinks(response.data);
-    const report = buildReport(response.data, linkValidation);
+    const linkValidation = await validateLinks(result.data);
+    const report = buildReport(result.data, linkValidation);
     currentReport = report;
 
     await chrome.storage.local.set({
@@ -168,10 +178,14 @@ async function analyzeActiveTab(forceRefresh = false) {
 
     renderReport(report, forceRefresh);
   } catch (error) {
+    const message =
+      error?.message && error.message !== "Unknown error."
+        ? error.message
+        : "This page could not be analyzed. Reload the extension and try a normal website tab.";
+
     renderStateCard(
       "Analysis unavailable",
-      error?.message ||
-        "This page could not be analyzed. Some pages block execution or expose very little readable content.",
+      message,
       `
         <div class="footer-actions">
           <button id="retry-analysis" class="button-secondary">Analyze again</button>
