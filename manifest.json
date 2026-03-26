@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Broken Website Detector",
+  "version": "1.0.0",
+  "description": "Analyze the current business website for UX, conversion, SEO, and technical issues that signal redesign or optimization opportunities.",
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Broken Website Detector",
+    "default_popup": "popup.html"
+  }
+}
