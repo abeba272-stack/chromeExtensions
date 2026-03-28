@@ -1,128 +1,19 @@
-const LINK_CHECK_LIMIT = 25;
-const FETCH_TIMEOUT_MS = 5000;
+const CLAUDE_URL = "https://claude.ai/";
 
-function withTimeout(promise, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+chrome.action.onClicked.addListener(async () => {
+  // Suche nach einem bereits offenen Claude-Tab.
+  const tabs = await chrome.tabs.query({});
 
-    promise
-      .then((value) => {
-        clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-  });
-}
-
-async function fetchWithFallback(url) {
-  try {
-    return await withTimeout(
-      fetch(url, {
-        method: "HEAD",
-        redirect: "follow",
-        cache: "no-store",
-        credentials: "omit"
-      }),
-      FETCH_TIMEOUT_MS
-    );
-  } catch (headError) {
-    return withTimeout(
-      fetch(url, {
-        method: "GET",
-        redirect: "follow",
-        cache: "no-store",
-        credentials: "omit"
-      }),
-      FETCH_TIMEOUT_MS
-    );
-  }
-}
-
-async function validateInternalLinks(origin, links) {
-  const safeLinks = Array.from(new Set(links || []))
-    .slice(0, LINK_CHECK_LIMIT)
-    .filter((href) => {
-      try {
-        return new URL(href).origin === origin;
-      } catch (error) {
-        return false;
-      }
-    });
-
-  const results = await Promise.all(
-    safeLinks.map(async (url) => {
-      try {
-        const response = await fetchWithFallback(url);
-        const finalUrl = response.url || url;
-        const status = response.status || 0;
-
-        if (status === 0 || status === 401 || status === 403) {
-          return {
-            url,
-            finalUrl,
-            state: "unchecked",
-            httpStatus: status,
-            reason: "restricted_response"
-          };
-        }
-
-        if (status >= 400) {
-          return {
-            url,
-            finalUrl,
-            state: "broken",
-            httpStatus: status
-          };
-        }
-
-        return {
-          url,
-          finalUrl,
-          state: "valid",
-          httpStatus: status
-        };
-      } catch (error) {
-        return {
-          url,
-          state: "unchecked",
-          reason: error && error.message ? error.message : "fetch_failed"
-        };
-      }
-    })
+  const existingTab = tabs.find(
+    (tab) => typeof tab.url === "string" && tab.url.includes("claude.ai")
   );
 
-  const summary = results.reduce(
-    (accumulator, item) => {
-      accumulator[item.state] += 1;
-      return accumulator;
-    },
-    { valid: 0, broken: 0, unchecked: 0 }
-  );
-
-  return {
-    checkedCount: results.length,
-    limit: LINK_CHECK_LIMIT,
-    summary,
-    results
-  };
-}
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== "BWD_VALIDATE_LINKS") {
-    return false;
+  if (existingTab && existingTab.id !== undefined) {
+    // Aktiviere den vorhandenen Tab, statt einen neuen zu erstellen.
+    await chrome.tabs.update(existingTab.id, { active: true });
+    return;
   }
 
-  validateInternalLinks(message.origin, message.links)
-    .then((data) => sendResponse({ ok: true, data }))
-    .catch((error) =>
-      sendResponse({
-        ok: false,
-        error: error && error.message ? error.message : "link_validation_failed"
-      })
-    );
-
-  return true;
+  // Falls kein Claude-Tab offen ist, erstelle einen neuen Tab.
+  await chrome.tabs.create({ url: CLAUDE_URL });
 });
