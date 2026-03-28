@@ -1,15 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Broken Website Detector",
+  "name": "Claude Quick Access",
+  "description": "Open Claude.ai instantly from the toolbar",
   "version": "1.0.0",
-  "description": "Analyze the current business website for UX, conversion, SEO, and technical issues that signal redesign or optimization opportunities.",
-  "permissions": ["activeTab", "scripting", "storage", "tabs"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": ["tabs"],
+  "action": {
+    "default_title": "Open Claude"
+  },
   "background": {
     "service_worker": "background.js"
-  },
-  "action": {
-    "default_title": "Broken Website Detector",
-    "default_popup": "popup.html"
   }
 }
