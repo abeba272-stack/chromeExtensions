@@ -1,18 +1,10 @@
 const Constants = window.WaveDropConstants;
 const Messages = window.WaveDropMessages;
 const Storage = window.WaveDropStorage;
-const {
-  MESSAGE_TYPES,
-  STORAGE_KEYS,
-  DOWNLOAD_FORMATS,
-  TASK_STATUS,
-  BRAND_TITLE,
-  BRAND_SUBTITLE,
-  DECORATIVE_MARK
-} = Constants;
+const { MESSAGE_TYPES, STORAGE_KEYS, DOWNLOAD_FORMATS, TASK_STATUS } = Constants;
 
 const root = document.getElementById("wd-popup-root");
-const cartonUrl = chrome.runtime.getURL("assets/juice-carton.svg");
+const contextBadge = document.getElementById("wd-popup-context-badge");
 
 const state = {
   activeTab: null,
@@ -76,6 +68,32 @@ function getStatusLabel(taskState) {
 
 function getBridgeState() {
   return state.preferences.localBridgeEndpoint ? "Bridge ready" : "Bridge off";
+}
+
+function getPopupVideo() {
+  return state.onYouTube ? state.activeVideo : null;
+}
+
+function getContextBadgeLabel() {
+  if (state.loading) {
+    return "Loading";
+  }
+
+  if (state.onYouTube && state.activeVideo) {
+    return "Video ready";
+  }
+
+  if (state.onYouTube) {
+    return "YouTube page";
+  }
+
+  return "Inactive tab";
+}
+
+function syncHeader() {
+  if (contextBadge) {
+    contextBadge.textContent = getContextBadgeLabel();
+  }
 }
 
 async function initializePopup() {
@@ -142,161 +160,153 @@ function renderNotice() {
     return "";
   }
 
-  return `<div class="wd-banner wd-banner-${escapeHtml(state.noticeTone)}">${escapeHtml(state.notice)}</div>`;
+  return `<div class="wd-popup-banner wd-popup-banner-${escapeHtml(state.noticeTone)}">${escapeHtml(state.notice)}</div>`;
 }
 
-function renderSummaryCard() {
-  if (!state.activeVideo) {
+function renderDownloadSection() {
+  const video = getPopupVideo();
+  const busy = Storage.isBusyTask(state.taskState);
+
+  if (!video) {
     return `
-      <section class="wd-section-card wd-empty-card">
-        <span class="wd-overline">Inactive tab</span>
-        <h2 class="wd-empty-title">Open a YouTube video</h2>
-        <p class="wd-empty-copy">The floating panel appears on watch pages and keeps this popup aligned with the live task state.</p>
+      <section class="wd-popup-section">
+        <div class="wd-popup-section-head">
+          <div>
+            <span class="wd-popup-label">Download controls</span>
+            <h2 class="wd-popup-section-title">Open a YouTube video</h2>
+          </div>
+          <span class="wd-popup-badge">Unavailable</span>
+        </div>
+        <div class="wd-popup-video-block">
+          <div class="wd-popup-video-frame wd-popup-video-frame-empty">No source</div>
+          <div class="wd-popup-video-copy">
+            <p class="wd-popup-video-title">WaveDrop activates on YouTube watch pages.</p>
+            <p class="wd-popup-video-meta wd-popup-empty-copy">Open a video tab to unlock MP3, MP4, and page actions from this popup.</p>
+          </div>
+        </div>
+        <div class="wd-popup-download-grid">
+          <button class="wd-popup-button wd-popup-button-download wd-popup-button-download-mp4" data-action="download-mp4" disabled>
+            <span class="wd-popup-button-title">Download MP4</span>
+            <span class="wd-popup-button-copy">Requires an active YouTube video.</span>
+          </button>
+          <button class="wd-popup-button wd-popup-button-download wd-popup-button-download-mp3" data-action="download-mp3" disabled>
+            <span class="wd-popup-button-title">Download MP3</span>
+            <span class="wd-popup-button-copy">Requires an active YouTube video.</span>
+          </button>
+        </div>
+        <div class="wd-popup-utility-row">
+          <button class="wd-popup-button wd-popup-button-secondary" data-action="open-panel" ${state.onYouTube ? "" : "disabled"}>Open panel on page</button>
+          <button class="wd-popup-button wd-popup-button-secondary" data-action="external" disabled>Open external tool</button>
+        </div>
       </section>
     `;
   }
 
   return `
-    <section class="wd-section-card wd-video-card wd-video-card-popup">
-      <div class="wd-video-frame wd-video-frame-popup">
-        <img class="wd-video-thumb" src="${escapeHtml(state.activeVideo.thumbnail)}" alt="${escapeHtml(state.activeVideo.title)} thumbnail" />
+    <section class="wd-popup-section">
+      <div class="wd-popup-section-head">
+        <div>
+          <span class="wd-popup-label">Download controls</span>
+          <h2 class="wd-popup-section-title">Current video</h2>
+        </div>
+        <span class="wd-popup-badge">${escapeHtml(getStatusLabel(state.taskState))}</span>
       </div>
-      <div class="wd-video-copy">
-        <span class="wd-overline">Current video</span>
-        <h2 class="wd-video-title" title="${escapeHtml(state.activeVideo.title)}">${escapeHtml(state.activeVideo.title)}</h2>
-        <div class="wd-video-meta-row">
-          <span class="wd-video-meta">${escapeHtml(state.activeVideo.channelName)}</span>
-          <span class="wd-meta-dot"></span>
-          <span class="wd-video-meta">${escapeHtml(state.activeVideo.duration)}</span>
+      <div class="wd-popup-video-block">
+        <div class="wd-popup-video-frame">
+          <img class="wd-popup-video-thumb" src="${escapeHtml(video.thumbnail)}" alt="${escapeHtml(video.title)} thumbnail" />
         </div>
-        <div class="wd-status-inline">
-          <span class="wd-status-pill wd-status-pill-${escapeHtml(state.taskState.status)}">${escapeHtml(getStatusLabel(state.taskState))}</span>
+        <div class="wd-popup-video-copy">
+          <p class="wd-popup-video-title" title="${escapeHtml(video.title)}">${escapeHtml(video.title)}</p>
+          <div class="wd-popup-meta-row">
+            <span class="wd-popup-video-meta">${escapeHtml(video.channelName)}</span>
+            <span class="wd-popup-meta-dot"></span>
+            <span class="wd-popup-video-meta">${escapeHtml(video.duration)}</span>
+          </div>
+          <p class="wd-popup-note">Use the bridge workflow for MP3 or MP4, or hand the active tab off to an external tool.</p>
         </div>
+      </div>
+      <div class="wd-popup-download-grid">
+        <button class="wd-popup-button wd-popup-button-download wd-popup-button-download-mp4" data-action="download-mp4" ${busy ? "disabled" : ""}>
+          <span class="wd-popup-button-title">Download MP4</span>
+          <span class="wd-popup-button-copy">Video with audio</span>
+        </button>
+        <button class="wd-popup-button wd-popup-button-download wd-popup-button-download-mp3" data-action="download-mp3" ${busy ? "disabled" : ""}>
+          <span class="wd-popup-button-title">Download MP3</span>
+          <span class="wd-popup-button-copy">Audio only</span>
+        </button>
+      </div>
+      <div class="wd-popup-utility-row">
+        <button class="wd-popup-button wd-popup-button-secondary" data-action="open-panel">Open panel on page</button>
+        <button class="wd-popup-button wd-popup-button-secondary" data-action="external" ${busy ? "disabled" : ""}>Open external tool</button>
       </div>
     </section>
   `;
 }
 
-function renderActionCard() {
-  const busy = Storage.isBusyTask(state.taskState);
-
-  return `
-    <section class="wd-section-card wd-actions-card wd-actions-card-popup">
-      <div class="wd-primary-actions wd-primary-actions-popup">
-        <button class="wd-primary-button wd-primary-button-video" data-action="download-mp4" ${busy || !state.activeVideo ? "disabled" : ""}>
-          <span class="wd-button-label">Download MP4</span>
-          <span class="wd-button-sub">Bridge task</span>
-        </button>
-        <button class="wd-primary-button wd-primary-button-audio" data-action="download-mp3" ${busy || !state.activeVideo ? "disabled" : ""}>
-          <span class="wd-button-label">Download MP3</span>
-          <span class="wd-button-sub">Bridge task</span>
-        </button>
-      </div>
-      <div class="wd-secondary-actions">
-        <button class="wd-secondary-button" data-action="open-panel" ${state.onYouTube ? "" : "disabled"}>Open panel on page</button>
-        <button class="wd-secondary-button" data-action="external" ${!state.activeVideo ? "disabled" : ""}>Open External Tool</button>
-      </div>
-    </section>
-  `;
-}
-
-function renderStatusCard() {
+function renderStatusSection() {
   const progress = Math.max(0, Math.min(100, Number(state.taskState.progress) || 0));
   const copy = state.taskState.error || state.taskState.message || "Ready";
+  const activeFormat = (state.taskState.format || state.preferences.preferredFormat || DOWNLOAD_FORMATS.MP4).toUpperCase();
 
   return `
-    <section class="wd-section-card wd-status-card">
-      <div class="wd-status-head">
+    <section class="wd-popup-section">
+      <div class="wd-popup-section-head">
         <div>
-          <span class="wd-overline">Task state</span>
-          <h3 class="wd-section-title">${escapeHtml(getStatusLabel(state.taskState))}</h3>
+          <span class="wd-popup-label">Status and feedback</span>
+          <h3 class="wd-popup-section-title">${escapeHtml(getStatusLabel(state.taskState))}</h3>
         </div>
-        <span class="wd-progress-value">${progress}%</span>
+        <span class="wd-popup-progress-value">${progress}%</span>
       </div>
-      <div class="wd-progress-track" aria-hidden="true">
-        <span class="wd-progress-fill wd-status-${escapeHtml(state.taskState.status)}" style="width:${progress}%"></span>
+      ${renderNotice()}
+      <div class="wd-popup-progress-head">
+        <p class="wd-popup-section-copy">${escapeHtml(getBridgeState())}</p>
+        <span class="wd-popup-badge">${escapeHtml(activeFormat)}</span>
       </div>
-      <p class="wd-status-copy">${escapeHtml(copy)}</p>
-    </section>
-  `;
-}
-
-function renderProviderCard() {
-  return `
-    <section class="wd-section-card wd-settings-card">
-      <div class="wd-card-head">
-        <div>
-          <span class="wd-overline">Provider</span>
-          <h3 class="wd-section-title">${escapeHtml(getBridgeState())}</h3>
-        </div>
-        <span class="wd-mini-pill">${escapeHtml(state.preferences.preferredFormat.toUpperCase() || "MP4")}</span>
+      <div class="wd-popup-progress-track" aria-hidden="true">
+        <span class="wd-popup-progress-fill" data-state="${escapeHtml(state.taskState.status)}" style="width:${progress}%"></span>
       </div>
-      <div class="wd-field-grid">
-        <label class="wd-field-label">
-          <span>Local bridge endpoint</span>
-          <input class="wd-input" data-field="localBridgeEndpoint" type="text" spellcheck="false" value="${escapeHtml(state.draftPreferences.localBridgeEndpoint)}" placeholder="http://127.0.0.1:4123/api/download" />
+      <p class="wd-popup-status-copy">${escapeHtml(copy)}</p>
+      <div class="wd-popup-settings-grid">
+        <label class="wd-popup-field">
+          <span class="wd-popup-field-label">Local bridge endpoint</span>
+          <input class="wd-popup-input" data-field="localBridgeEndpoint" type="text" spellcheck="false" value="${escapeHtml(state.draftPreferences.localBridgeEndpoint)}" placeholder="http://127.0.0.1:4123/api/download" />
         </label>
-        <label class="wd-field-label">
-          <span>External tool URL</span>
-          <input class="wd-input" data-field="externalToolUrlTemplate" type="text" spellcheck="false" value="${escapeHtml(state.draftPreferences.externalToolUrlTemplate)}" placeholder="https://example.com/import?url={url}" />
+        <label class="wd-popup-field">
+          <span class="wd-popup-field-label">External tool URL</span>
+          <input class="wd-popup-input" data-field="externalToolUrlTemplate" type="text" spellcheck="false" value="${escapeHtml(state.draftPreferences.externalToolUrlTemplate)}" placeholder="https://example.com/import?url={url}" />
         </label>
       </div>
-      <div class="wd-secondary-actions">
-        <button class="wd-secondary-button" data-action="save-settings">Save settings</button>
-        <button class="wd-secondary-button" data-action="reset-task">Clear status</button>
+      <div class="wd-popup-utility-row">
+        <button class="wd-popup-button wd-popup-button-secondary" data-action="save-settings">Save settings</button>
+        <button class="wd-popup-button wd-popup-button-secondary" data-action="reset-task">Clear status</button>
       </div>
-      <p class="wd-settings-note">Tokens: <code>{url}</code> <code>{title}</code> <code>{channel}</code> <code>{duration}</code> <code>{videoId}</code> <code>{format}</code>.</p>
-    </section>
-  `;
-}
-
-function renderAtmosphereCard() {
-  return `
-    <section class="wd-section-card wd-atmosphere-card wd-atmosphere-card-popup">
-      <div class="wd-atmosphere-copy">
-        <span class="wd-ornament-title">${escapeHtml(BRAND_SUBTITLE)}</span>
-        <div class="wd-waveform" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-        </div>
-      </div>
-      <div class="wd-atmosphere-art" aria-hidden="true">
-        <div class="wd-nine-nine-nine">${escapeHtml(DECORATIVE_MARK)}</div>
-        <img class="wd-carton-symbol" src="${escapeHtml(cartonUrl)}" alt="" />
-      </div>
+      <p class="wd-popup-settings-note">Tokens: <code>{url}</code> <code>{title}</code> <code>{channel}</code> <code>{duration}</code> <code>{videoId}</code> <code>{format}</code>.</p>
     </section>
   `;
 }
 
 function renderLoading() {
+  syncHeader();
   root.innerHTML = `
-    <div class="wd-shell-body wd-popup-shell-body">
-      <section class="wd-section-card wd-skeleton-card">
-        <div class="wd-skeleton wd-skeleton-heading"></div>
-        <div class="wd-skeleton wd-skeleton-block"></div>
-      </section>
-      <section class="wd-section-card wd-skeleton-card">
-        <div class="wd-skeleton wd-skeleton-line"></div>
-        <div class="wd-skeleton wd-skeleton-line"></div>
-        <div class="wd-skeleton wd-skeleton-line wd-skeleton-line-short"></div>
-      </section>
+    <div class="wd-popup-layout wd-popup-skeleton">
+      <div class="wd-popup-skeleton-card"></div>
+      <div class="wd-popup-skeleton-card"></div>
     </div>
   `;
 }
 
 function render() {
+  syncHeader();
+
   if (state.loading) {
     renderLoading();
     return;
   }
 
   root.innerHTML = `
-    <div class="wd-shell-body wd-popup-shell-body">
-      ${renderNotice()}
-      ${renderSummaryCard()}
-      ${renderActionCard()}
-      ${renderStatusCard()}
-      ${renderProviderCard()}
-      ${renderAtmosphereCard()}
+    <div class="wd-popup-layout">
+      ${renderDownloadSection()}
+      ${renderStatusSection()}
     </div>
   `;
 }
@@ -316,13 +326,15 @@ async function savePreferences() {
 }
 
 async function handleDownload(format) {
-  if (!state.activeVideo) {
+  const video = getPopupVideo();
+
+  if (!video) {
     setNotice("Open a YouTube video first", "error");
     return;
   }
 
   const response = await Messages.sendRuntime(MESSAGE_TYPES.START_DOWNLOAD, {
-    video: state.activeVideo,
+    video,
     format
   });
 
@@ -352,12 +364,14 @@ async function openPanelOnPage() {
 }
 
 async function openExternalTool() {
-  if (!state.activeVideo) {
+  const video = getPopupVideo();
+
+  if (!video) {
     throw new Error("missing_video_url");
   }
 
   const response = await Messages.sendRuntime(MESSAGE_TYPES.OPEN_EXTERNAL_TOOL, {
-    video: state.activeVideo,
+    video,
     format: state.preferences.preferredFormat
   });
 
@@ -400,6 +414,9 @@ function getReadableError(error) {
   }
   if (code === "unsupported_tab") {
     return "Open a YouTube watch page first.";
+  }
+  if (code === "missing_video_url") {
+    return "Open a YouTube video first.";
   }
   if (code === "invalid_external_tool_url_template") {
     return "Use a valid external tool URL template.";
@@ -461,7 +478,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     render();
   }
 
-  if (changes[STORAGE_KEYS.ACTIVE_VIDEO]?.newValue && !state.onYouTube) {
+  if (changes[STORAGE_KEYS.ACTIVE_VIDEO]?.newValue) {
     state.activeVideo = changes[STORAGE_KEYS.ACTIVE_VIDEO].newValue;
     render();
   }
