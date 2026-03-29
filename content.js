@@ -6,6 +6,17 @@
   window.__WAVEDROP_LOADED__ = true;
 
   const ROOT_ID = "wavedrop-overlay-root";
+  const LIBRARY_KEY = "wavedropLibrary";
+  const UI_STATE_KEY = "wavedropUiState";
+  const DEFAULT_UI_STATE = Object.freeze({
+    mode: "open",
+    position: {
+      anchored: true,
+      top: 18,
+      left: 18
+    }
+  });
+
   const state = {
     video: null,
     videoFingerprint: "",
@@ -13,7 +24,8 @@
     feedback: "",
     feedbackTone: "info",
     pendingAction: "",
-    panelMode: "open"
+    uiState: createDefaultUiState(),
+    hydrated: false
   };
 
   let host = null;
@@ -21,6 +33,19 @@
   let mountNode = null;
   let refreshTimer = null;
   let feedbackTimer = null;
+  let hydratePromise = null;
+  let dragState = null;
+
+  function createDefaultUiState() {
+    return {
+      mode: DEFAULT_UI_STATE.mode,
+      position: {
+        anchored: DEFAULT_UI_STATE.position.anchored,
+        top: DEFAULT_UI_STATE.position.top,
+        left: DEFAULT_UI_STATE.position.left
+      }
+    };
+  }
 
   function normalizeText(value, fallback = "") {
     const normalized = String(value ?? "")
@@ -39,34 +64,90 @@
       .replace(/'/g, "&#39;");
   }
 
+  function sanitizeNumber(value, fallback) {
+    const parsed = Number(value);
+
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+
+    return Math.max(0, Math.round(parsed));
+  }
+
   function normalizePanelMode(value) {
     return ["open", "minimized", "closed"].includes(value) ? value : "open";
   }
 
-  function getPanelPreferenceKey(videoId = getVideoId()) {
-    return videoId ? `wavedrop:panel:${videoId}` : "wavedrop:panel:default";
+  function normalizeUiState(value = {}) {
+    const position = value?.position || {};
+
+    return {
+      mode: normalizePanelMode(value?.mode),
+      position: {
+        anchored: position.anchored !== false,
+        top: sanitizeNumber(position.top, DEFAULT_UI_STATE.position.top),
+        left: sanitizeNumber(position.left, DEFAULT_UI_STATE.position.left)
+      }
+    };
   }
 
-  function loadPanelMode(videoId = getVideoId()) {
-    try {
-      return normalizePanelMode(sessionStorage.getItem(getPanelPreferenceKey(videoId)));
-    } catch (error) {
-      return "open";
+  function updateUiState(nextUiState, { persist = true, rerender = true } = {}) {
+    state.uiState = normalizeUiState(nextUiState);
+
+    if (rerender) {
+      render();
+    } else {
+      applyHostLayout();
+    }
+
+    if (persist) {
+      void persistUiState();
     }
   }
 
-  function persistPanelMode(mode, videoId = getVideoId()) {
+  async function persistUiState() {
     try {
-      sessionStorage.setItem(getPanelPreferenceKey(videoId), normalizePanelMode(mode));
+      await chrome.runtime.sendMessage({
+        type: "WAVEDROP_SET_UI_STATE",
+        uiState: state.uiState
+      });
     } catch (error) {
-      // Ignore storage failures in restricted contexts.
+      // Ignore storage sync failures so the overlay remains responsive.
     }
   }
 
-  function setPanelMode(mode) {
-    state.panelMode = normalizePanelMode(mode);
-    persistPanelMode(state.panelMode, state.video?.videoId || getVideoId());
-    render();
+  async function hydrateStateOnce() {
+    if (state.hydrated) {
+      return;
+    }
+
+    if (!hydratePromise) {
+      hydratePromise = chrome.runtime
+        .sendMessage({ type: "WAVEDROP_GET_STATE" })
+        .then((response) => {
+          const payload = response?.data || {};
+          const library = Array.isArray(payload.library) ? payload.library : [];
+
+          state.uiState = normalizeUiState(payload.uiState);
+          if (state.video) {
+            state.isSaved = library.some(
+              (entry) =>
+                (state.video.videoId && entry.videoId === state.video.videoId) ||
+                entry.url === state.video.url
+            );
+          }
+        })
+        .catch(() => {
+          state.uiState = createDefaultUiState();
+        })
+        .finally(() => {
+          state.hydrated = true;
+          hydratePromise = null;
+          render();
+        });
+    }
+
+    await hydratePromise;
   }
 
   function getVideoId(urlValue = window.location.href) {
@@ -221,6 +302,45 @@
     ]);
   }
 
+  function getTargetPanelWidth() {
+    const viewportWidth = Math.max(220, window.innerWidth - 24);
+
+    if (state.uiState.mode === "closed") {
+      return Math.min(176, viewportWidth);
+    }
+
+    if (state.uiState.mode === "minimized") {
+      return Math.min(294, viewportWidth);
+    }
+
+    return Math.min(360, viewportWidth);
+  }
+
+  function estimatePanelHeight() {
+    if (state.uiState.mode === "closed") {
+      return 76;
+    }
+
+    if (state.uiState.mode === "minimized") {
+      return 104;
+    }
+
+    return 390;
+  }
+
+  function clampFloatingPosition(position, panelSize) {
+    const margin = 12;
+    const width = Math.max(160, Math.round(panelSize.width || getTargetPanelWidth()));
+    const height = Math.max(72, Math.round(panelSize.height || estimatePanelHeight()));
+    const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+    const maxTop = Math.max(margin, window.innerHeight - height - margin);
+
+    return {
+      left: Math.min(maxLeft, Math.max(margin, Math.round(position.left))),
+      top: Math.min(maxTop, Math.max(margin, Math.round(position.top)))
+    };
+  }
+
   function ensureMountNode() {
     if (mountNode) {
       return mountNode;
@@ -229,10 +349,9 @@
     host = document.getElementById(ROOT_ID) || document.createElement("div");
     host.id = ROOT_ID;
     host.style.position = "fixed";
-    host.style.top = "18px";
-    host.style.right = "18px";
     host.style.zIndex = "2147483647";
     host.style.pointerEvents = "auto";
+    host.style.transition = "top 180ms ease, left 180ms ease, right 180ms ease, width 180ms ease";
 
     if (!host.parentNode) {
       document.documentElement.appendChild(host);
@@ -255,6 +374,7 @@
       mountNode.id = "wavedrop-content";
       shadow.appendChild(mountNode);
       shadow.addEventListener("click", handleShadowClick);
+      shadow.addEventListener("pointerdown", handleShadowPointerDown);
     }
 
     return mountNode;
@@ -265,25 +385,41 @@
       return;
     }
 
-    if (state.panelMode === "closed") {
-      host.style.width = "176px";
+    const width = getTargetPanelWidth();
+    host.style.width = `${width}px`;
+
+    if (state.uiState.position.anchored) {
+      host.style.top = `${state.uiState.position.top}px`;
+      host.style.right = "18px";
+      host.style.left = "auto";
       return;
     }
 
-    if (state.panelMode === "minimized") {
-      host.style.width = "min(294px, calc(100vw - 24px))";
-      return;
-    }
+    const currentRect = host.getBoundingClientRect();
+    const clamped = clampFloatingPosition(state.uiState.position, {
+      width,
+      height: currentRect.height || estimatePanelHeight()
+    });
 
-    host.style.width = "min(360px, calc(100vw - 24px))";
+    state.uiState.position = {
+      anchored: false,
+      top: clamped.top,
+      left: clamped.left
+    };
+
+    host.style.top = `${clamped.top}px`;
+    host.style.left = `${clamped.left}px`;
+    host.style.right = "auto";
   }
 
   function destroyMountNode() {
     clearTimeout(feedbackTimer);
+    dragState = null;
     mountNode = null;
     shadow = null;
 
     if (host) {
+      host.removeAttribute("data-dragging");
       host.remove();
       host = null;
     }
@@ -339,7 +475,7 @@
 
   async function copySharePayload(video) {
     await copyToClipboard(
-      `${video.title}\n${video.channelName} • ${video.duration}\n${video.url}`,
+      `${video.title}\n${video.channelName} - ${video.duration}\n${video.url}`,
       "Share-ready text copied"
     );
   }
@@ -349,7 +485,7 @@
       try {
         await navigator.share({
           title: video.title,
-          text: `${video.channelName} • ${video.duration}`,
+          text: `${video.channelName} - ${video.duration}`,
           url: video.url
         });
         setFeedback("Share sheet opened", "success");
@@ -364,17 +500,16 @@
     await copySharePayload(video);
   }
 
-  async function syncSavedState() {
+  async function syncSavedState(libraryOverride) {
     if (!state.video) {
       state.isSaved = false;
       return;
     }
 
     try {
-      const response = await chrome.runtime.sendMessage({
-        type: "WAVEDROP_GET_STATE"
-      });
-      const library = response?.data?.library || [];
+      const library = Array.isArray(libraryOverride)
+        ? libraryOverride
+        : (await chrome.runtime.sendMessage({ type: "WAVEDROP_GET_STATE" }))?.data?.library || [];
 
       state.isSaved = library.some(
         (entry) =>
@@ -401,6 +536,24 @@
     } catch (error) {
       // Ignore transient storage sync failures so the overlay remains instant.
     }
+  }
+
+  function getActionErrorMessage(action, error) {
+    const code = error?.message || error?.error || "";
+
+    if (code === "invalid_external_tool_url_template") {
+      return "Set a valid https:// external tool URL in the popup";
+    }
+
+    if (code === "missing_video_url") {
+      return "Video link unavailable on this page";
+    }
+
+    if (action === "external") {
+      return "External tool unavailable right now";
+    }
+
+    return "Action unavailable right now";
   }
 
   async function handleAction(action) {
@@ -457,11 +610,35 @@
           break;
       }
     } catch (error) {
-      setFeedback("Action unavailable right now", "error");
+      setFeedback(getActionErrorMessage(action, error), "error");
     } finally {
       state.pendingAction = "";
       render();
     }
+  }
+
+  function setPanelMode(mode) {
+    updateUiState(
+      {
+        ...state.uiState,
+        mode: normalizePanelMode(mode)
+      },
+      { persist: true, rerender: true }
+    );
+  }
+
+  function restorePanel() {
+    updateUiState(
+      {
+        ...state.uiState,
+        mode: "open"
+      },
+      { persist: true, rerender: true }
+    );
+  }
+
+  function resetPanel() {
+    updateUiState(createDefaultUiState(), { persist: true, rerender: true });
   }
 
   function handleShadowClick(event) {
@@ -474,8 +651,10 @@
         setPanelMode("closed");
       } else if (control === "minimize") {
         setPanelMode("minimized");
-      } else if (control === "open") {
-        setPanelMode("open");
+      } else if (control === "restore") {
+        restorePanel();
+      } else if (control === "reset") {
+        resetPanel();
       }
 
       return;
@@ -490,12 +669,112 @@
     handleAction(actionButton.dataset.action);
   }
 
+  function handleShadowPointerDown(event) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const dragHandle = event.target.closest("[data-drag-handle]");
+
+    if (!dragHandle || event.target.closest("button, a, input, textarea")) {
+      return;
+    }
+
+    if (!host || !state.video || state.uiState.mode === "closed") {
+      return;
+    }
+
+    const rect = host.getBoundingClientRect();
+    state.uiState = normalizeUiState({
+      ...state.uiState,
+      position: {
+        anchored: false,
+        top: rect.top,
+        left: rect.left
+      }
+    });
+
+    dragState = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      panelWidth: rect.width,
+      panelHeight: rect.height
+    };
+
+    host.dataset.dragging = "true";
+    applyHostLayout();
+    event.preventDefault();
+  }
+
+  function handleGlobalPointerMove(event) {
+    if (!dragState || event.pointerId !== dragState.pointerId) {
+      return;
+    }
+
+    const clamped = clampFloatingPosition(
+      {
+        left: event.clientX - dragState.offsetX,
+        top: event.clientY - dragState.offsetY
+      },
+      {
+        width: dragState.panelWidth,
+        height: dragState.panelHeight
+      }
+    );
+
+    state.uiState = normalizeUiState({
+      ...state.uiState,
+      position: {
+        anchored: false,
+        top: clamped.top,
+        left: clamped.left
+      }
+    });
+
+    applyHostLayout();
+    event.preventDefault();
+  }
+
+  function stopDragging(shouldPersist) {
+    if (!dragState) {
+      return;
+    }
+
+    dragState = null;
+
+    if (host) {
+      host.removeAttribute("data-dragging");
+    }
+
+    if (shouldPersist) {
+      void persistUiState();
+    }
+  }
+
+  function handleGlobalPointerUp(event) {
+    if (!dragState || event.pointerId !== dragState.pointerId) {
+      return;
+    }
+
+    stopDragging(true);
+    event.preventDefault();
+  }
+
+  function handleWindowResize() {
+    if (!state.video) {
+      return;
+    }
+
+    render();
+  }
+
   function getWindowControlsMarkup() {
     return `
       <div class="wd-window-controls" aria-label="Overlay controls">
         <button class="wd-window-dot wd-window-dot-red" data-control="close" aria-label="Hide WaveDrop"></button>
         <button class="wd-window-dot wd-window-dot-yellow" data-control="minimize" aria-label="Minimize WaveDrop"></button>
-        <button class="wd-window-dot wd-window-dot-green" data-control="open" aria-label="Expand WaveDrop"></button>
+        <button class="wd-window-dot wd-window-dot-green" data-control="reset" aria-label="Reset WaveDrop position"></button>
       </div>
     `;
   }
@@ -503,9 +782,9 @@
   function renderClosedState() {
     return `
       <div class="wd-overlay-shell wd-overlay-shell-launcher">
-        <button class="wd-launcher-card" data-control="open" aria-label="Open WaveDrop">
+        <button class="wd-launcher-card" data-control="restore" aria-label="Open WaveDrop">
           <span class="wd-launcher-label">WaveDrop</span>
-          <span class="wd-launcher-meta">${escapeHtml(state.video.duration)}</span>
+          <span class="wd-launcher-meta">${escapeHtml(state.video.title)}</span>
         </button>
       </div>
     `;
@@ -516,11 +795,11 @@
       <div class="wd-overlay-shell">
         <div class="wd-glow wd-glow-one"></div>
         <section class="wd-overlay-panel wd-overlay-panel-minimized wd-glass-card wd-animate-in">
-          <div class="wd-panel-chrome">
+          <div class="wd-panel-chrome" data-drag-handle="true">
             ${getWindowControlsMarkup()}
             <span class="wd-chip wd-chip-live">Minimized</span>
           </div>
-          <button class="wd-mini-bar" data-control="open" aria-label="Expand WaveDrop">
+          <button class="wd-mini-bar" data-control="restore" aria-label="Expand WaveDrop">
             <span class="wd-mini-title">WaveDrop</span>
             <span class="wd-mini-track">${escapeHtml(state.video.title)}</span>
           </button>
@@ -537,17 +816,17 @@
         <div class="wd-glow wd-glow-one"></div>
         <div class="wd-glow wd-glow-two"></div>
         <section class="wd-overlay-panel wd-glass-card wd-animate-in">
-          <div class="wd-panel-chrome">
+          <div class="wd-panel-chrome" data-drag-handle="true">
             ${getWindowControlsMarkup()}
-            <span class="wd-chip wd-chip-live">Watch page</span>
+            <span class="wd-chip wd-chip-live">Drag me</span>
           </div>
 
           <div class="wd-panel-top">
             <div class="wd-panel-intro">
               <p class="wd-kicker">WaveDrop</p>
-              <h2 class="wd-panel-title">Midnight tape companion</h2>
+              <h2 class="wd-panel-title">Lucid noir companion</h2>
               <p class="wd-panel-mood">
-                Noir glass, neon bleed, and a quick local vault for the track in front of you.
+                Mac chrome up top, neon bruised glass beneath, and a quick handoff lane for the video in front of you.
               </p>
             </div>
           </div>
@@ -592,7 +871,7 @@
               ${
                 state.feedback
                   ? `<span class="wd-notice wd-notice-${escapeHtml(state.feedbackTone)}">${escapeHtml(state.feedback)}</span>`
-                  : "Collect the link, hand it off, or pin it to your local library."
+                  : "Drag the top chrome to move the panel, use yellow to tuck it away, and green to snap it back to the top-right corner."
               }
             </p>
           </div>
@@ -608,19 +887,21 @@
     }
 
     const root = ensureMountNode();
-    applyHostLayout();
 
-    if (state.panelMode === "closed") {
+    if (state.uiState.mode === "closed") {
       root.innerHTML = renderClosedState();
+      applyHostLayout();
       return;
     }
 
-    if (state.panelMode === "minimized") {
+    if (state.uiState.mode === "minimized") {
       root.innerHTML = renderMinimizedState();
+      applyHostLayout();
       return;
     }
 
     root.innerHTML = renderOpenState();
+    applyHostLayout();
   }
 
   async function refreshVideoState() {
@@ -629,7 +910,7 @@
       state.videoFingerprint = "";
       state.isSaved = false;
       state.pendingAction = "";
-      state.panelMode = "open";
+      dragState = null;
       destroyMountNode();
       return;
     }
@@ -645,8 +926,8 @@
     state.video = nextVideo;
     state.videoFingerprint = nextFingerprint;
 
-    if (metadataChanged) {
-      state.panelMode = loadPanelMode(nextVideo.videoId);
+    if (!state.hydrated) {
+      await hydrateStateOnce();
     }
 
     render();
@@ -694,6 +975,30 @@
     return false;
   });
 
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") {
+      return;
+    }
+
+    if (changes[UI_STATE_KEY]?.newValue) {
+      state.uiState = normalizeUiState(changes[UI_STATE_KEY].newValue);
+      render();
+    }
+
+    if (changes[LIBRARY_KEY]?.newValue && state.video) {
+      const library = Array.isArray(changes[LIBRARY_KEY].newValue)
+        ? changes[LIBRARY_KEY].newValue
+        : [];
+
+      state.isSaved = library.some(
+        (entry) =>
+          (state.video.videoId && entry.videoId === state.video.videoId) ||
+          entry.url === state.video.url
+      );
+      render();
+    }
+  });
+
   const observer = new MutationObserver(() => {
     scheduleRefresh(220);
   });
@@ -706,6 +1011,10 @@
   window.addEventListener("yt-navigate-finish", () => scheduleRefresh(260));
   window.addEventListener("popstate", () => scheduleRefresh(260));
   window.addEventListener("hashchange", () => scheduleRefresh(260));
+  window.addEventListener("resize", handleWindowResize);
+  window.addEventListener("pointermove", handleGlobalPointerMove, true);
+  window.addEventListener("pointerup", handleGlobalPointerUp, true);
+  window.addEventListener("pointercancel", handleGlobalPointerUp, true);
 
   scheduleRefresh(50);
 })();

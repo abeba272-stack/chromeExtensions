@@ -1,3 +1,7 @@
+const PREFERENCES_KEY = "wavedropPreferences";
+const DEFAULT_EXTERNAL_TOOL_TEMPLATE =
+  "https://www.google.com/search?q={title}%20{channel}%20{url}";
+
 const app = document.getElementById("app");
 
 const state = {
@@ -8,13 +12,32 @@ const state = {
   notice: "",
   noticeTone: "info",
   loading: true,
-  onLiveWatchPage: false
+  onLiveWatchPage: false,
+  preferences: createDefaultPreferences(),
+  preferencesDraft: DEFAULT_EXTERNAL_TOOL_TEMPLATE,
+  savingPreferences: false
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   initializePopup();
   app.addEventListener("click", handleAppClick);
+  app.addEventListener("input", handleAppInput);
 });
+
+function createDefaultPreferences() {
+  return {
+    externalToolUrlTemplate: DEFAULT_EXTERNAL_TOOL_TEMPLATE
+  };
+}
+
+function normalizePreferences(value = {}) {
+  return {
+    externalToolUrlTemplate: normalizeText(
+      value?.externalToolUrlTemplate,
+      DEFAULT_EXTERNAL_TOOL_TEMPLATE
+    )
+  };
+}
 
 function normalizeText(value, fallback = "") {
   const normalized = String(value ?? "")
@@ -105,6 +128,20 @@ function setNotice(message, tone = "info") {
   }, 2200);
 }
 
+function getActionErrorMessage(error, fallback = "Action unavailable right now") {
+  const code = error?.message || error?.error || "";
+
+  if (code === "invalid_external_tool_url_template") {
+    return "Enter a valid https:// external tool URL template";
+  }
+
+  if (code === "missing_video_url") {
+    return "No video link is available for this tab";
+  }
+
+  return fallback;
+}
+
 async function initializePopup() {
   render();
 
@@ -116,6 +153,8 @@ async function initializePopup() {
 
     state.activeTab = tabs[0] || null;
     state.library = backgroundState?.data?.library || [];
+    state.preferences = normalizePreferences(backgroundState?.data?.preferences);
+    state.preferencesDraft = state.preferences.externalToolUrlTemplate;
 
     const tabContext = await getTabContext(state.activeTab);
     const fallbackVideo = backgroundState?.data?.activeVideo || null;
@@ -200,7 +239,7 @@ function renderCurrentVideoSection() {
         <p class="wd-section-label">Current video</p>
         <h2 class="wd-empty-title">Open a YouTube watch page</h2>
         <p class="wd-empty-copy">
-          WaveDrop activates on normal YouTube video URLs and keeps the latest capture ready in the popup.
+          WaveDrop activates on YouTube watch, shorts, and music pages, then keeps the latest capture ready in the popup.
         </p>
       </section>
     `;
@@ -247,6 +286,50 @@ function renderCurrentVideoSection() {
         </button>
         <button class="wd-action-button" data-action="save-current">Save to Library</button>
         <button class="wd-action-button" data-action="share-current">Share</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderPreferencesSection() {
+  return `
+    <section class="wd-glass-card wd-preferences-card">
+      <div class="wd-card-head">
+        <div>
+          <p class="wd-section-label">External tool</p>
+          <h2 class="wd-section-title">Configure your handoff target</h2>
+        </div>
+        <span class="wd-chip wd-chip-live">Editable</span>
+      </div>
+
+      <div class="wd-form-stack">
+        <label class="wd-input-label" for="external-tool-template">Tool URL template</label>
+        <input
+          id="external-tool-template"
+          class="wd-text-input"
+          data-field="external-tool-template"
+          type="text"
+          spellcheck="false"
+          value="${escapeHtml(state.preferencesDraft)}"
+          placeholder="https://example.com/import?url={url}"
+        />
+        <p class="wd-field-help">
+          Use a full <code>https://</code> URL and compose it with tokens that WaveDrop can inject.
+        </p>
+        <div class="wd-token-row">
+          <span class="wd-token"><code>{url}</code></span>
+          <span class="wd-token"><code>{title}</code></span>
+          <span class="wd-token"><code>{channel}</code></span>
+          <span class="wd-token"><code>{duration}</code></span>
+          <span class="wd-token"><code>{videoId}</code></span>
+          <span class="wd-token"><code>{thumbnail}</code></span>
+        </div>
+        <div class="wd-inline-actions">
+          <button class="wd-mini-button wd-action-button-accent" data-action="save-preferences">
+            ${state.savingPreferences ? "Saving..." : "Save tool target"}
+          </button>
+          <button class="wd-mini-button" data-action="reset-preferences">Reset default</button>
+        </div>
       </div>
     </section>
   `;
@@ -342,6 +425,7 @@ function render() {
     <div class="wd-popup-stack">
       ${renderNotice()}
       ${renderCurrentVideoSection()}
+      ${renderPreferencesSection()}
       ${renderLibrarySection()}
     </div>
   `;
@@ -391,7 +475,7 @@ async function shareVideo(video) {
     try {
       await navigator.share({
         title: video.title,
-        text: `${video.channelName} • ${video.duration}`,
+        text: `${video.channelName} - ${video.duration}`,
         url: video.url
       });
       setNotice("Share sheet opened", "success");
@@ -404,9 +488,21 @@ async function shareVideo(video) {
   }
 
   await copyToClipboard(
-    `${video.title}\n${video.channelName} • ${video.duration}\n${video.url}`,
+    `${video.title}\n${video.channelName} - ${video.duration}\n${video.url}`,
     "Share-ready text copied"
   );
+}
+
+function handleAppInput(event) {
+  const field = event.target.closest("[data-field]");
+
+  if (!field) {
+    return;
+  }
+
+  if (field.dataset.field === "external-tool-template") {
+    state.preferencesDraft = field.value;
+  }
 }
 
 async function handleAppClick(event) {
@@ -465,6 +561,54 @@ async function handleAppClick(event) {
         await shareVideo(state.currentVideo);
         break;
 
+      case "save-preferences": {
+        if (state.savingPreferences) {
+          return;
+        }
+
+        state.savingPreferences = true;
+        render();
+
+        const response = await chrome.runtime.sendMessage({
+          type: "WAVEDROP_SET_PREFERENCES",
+          preferences: {
+            externalToolUrlTemplate: state.preferencesDraft
+          }
+        });
+
+        if (!response?.ok || !response.data) {
+          throw new Error(response?.error || "preferences_save_failed");
+        }
+
+        state.preferences = normalizePreferences(response.data);
+        state.preferencesDraft = state.preferences.externalToolUrlTemplate;
+        setNotice("External tool target saved", "success");
+        break;
+      }
+
+      case "reset-preferences": {
+        if (state.savingPreferences) {
+          return;
+        }
+
+        state.savingPreferences = true;
+        render();
+
+        const response = await chrome.runtime.sendMessage({
+          type: "WAVEDROP_SET_PREFERENCES",
+          preferences: createDefaultPreferences()
+        });
+
+        if (!response?.ok || !response.data) {
+          throw new Error(response?.error || "preferences_reset_failed");
+        }
+
+        state.preferences = normalizePreferences(response.data);
+        state.preferencesDraft = state.preferences.externalToolUrlTemplate;
+        setNotice("External tool target reset", "success");
+        break;
+      }
+
       case "open-library":
         if (libraryVideo?.url) {
           await chrome.tabs.create({ url: libraryVideo.url });
@@ -499,6 +643,37 @@ async function handleAppClick(event) {
         break;
     }
   } catch (error) {
-    setNotice("Action unavailable right now", "error");
+    setNotice(getActionErrorMessage(error), "error");
+  } finally {
+    state.savingPreferences = false;
+    render();
   }
 }
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") {
+    return;
+  }
+
+  if (changes.wavedropLibrary?.newValue) {
+    state.library = Array.isArray(changes.wavedropLibrary.newValue)
+      ? changes.wavedropLibrary.newValue
+      : [];
+    state.isSaved = !!findLibraryMatch(state.currentVideo);
+    render();
+  }
+
+  if (changes.wavedropActiveVideo?.newValue && !state.onLiveWatchPage) {
+    state.currentVideo = changes.wavedropActiveVideo.newValue || state.currentVideo;
+    state.isSaved = !!findLibraryMatch(state.currentVideo);
+    render();
+  }
+
+  if (changes[PREFERENCES_KEY]?.newValue) {
+    state.preferences = normalizePreferences(changes[PREFERENCES_KEY].newValue);
+    if (!state.savingPreferences) {
+      state.preferencesDraft = state.preferences.externalToolUrlTemplate;
+    }
+    render();
+  }
+});

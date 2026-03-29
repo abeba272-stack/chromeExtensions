@@ -631,3 +631,105 @@ code {
     font-size: 22px;
   }
 }
+
+
+.wd-panel-chrome[data-drag-handle] {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.wd-panel-chrome[data-drag-handle] .wd-window-controls,
+.wd-panel-chrome[data-drag-handle] .wd-chip {
+  cursor: default;
+}
+
+:host([data-dragging="true"]) .wd-panel-chrome[data-drag-handle] {
+  cursor: grabbing;
+}
+
+.wd-preferences-card {
+  background:
+    radial-gradient(circle at top left, rgba(200, 92, 255, 0.1), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(255, 184, 107, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025)),
+    var(--wd-panel-strong);
+}
+
+.wd-form-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.wd-input-label {
+  color: var(--wd-muted-strong);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.wd-text-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(255, 255, 255, 0.03);
+  color: var(--wd-text);
+  font: inherit;
+}
+
+.wd-text-input::placeholder {
+  color: rgba(204, 180, 181, 0.65);
+}
+
+.wd-text-input:hover {
+  border-color: var(--wd-line-strong);
+}
+
+.wd-text-input:focus-visible {
+  outline: 2px solid rgba(255, 184, 107, 0.42);
+  outline-offset: 2px;
+  border-color: transparent;
+}
+
+.wd-field-help {
+  margin: 0;
+  color: var(--wd-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.wd-token-row,
+.wd-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wd-token {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.wd-token code {
+  color: var(--wd-accent-strong);
+}
+
+@media (max-width: 480px) {
+  .wd-inline-actions {
+    flex-direction: column;
+  }
+
+  .wd-inline-actions .wd-mini-button {
+    width: 100%;
+  }
+}
