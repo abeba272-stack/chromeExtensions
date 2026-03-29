@@ -9,8 +9,13 @@ chrome.action.onClicked.addListener(async () => {
   );
 
   if (existingTab && existingTab.id !== undefined) {
-    // Aktiviere den vorhandenen Tab, statt einen neuen zu erstellen.
+    // Aktiviere den vorhandenen Tab und hole bei Bedarf dessen Fenster nach vorn.
     await chrome.tabs.update(existingTab.id, { active: true });
+
+    if (existingTab.windowId !== undefined) {
+      await chrome.windows.update(existingTab.windowId, { focused: true });
+    }
+
     return;
   }
 
