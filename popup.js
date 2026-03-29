@@ -52,10 +52,28 @@ function formatSavedDate(value) {
   }).format(parsed);
 }
 
+function extractVideoIdFromUrl(urlValue) {
+  try {
+    const parsed = new URL(urlValue);
+
+    if (parsed.pathname === "/watch") {
+      return parsed.searchParams.get("v") || "";
+    }
+
+    if (parsed.pathname.startsWith("/shorts/")) {
+      return parsed.pathname.split("/shorts/")[1]?.split("/")[0] || "";
+    }
+
+    return "";
+  } catch (error) {
+    return "";
+  }
+}
+
 function isYouTubeWatchUrl(urlValue) {
   try {
     const parsed = new URL(urlValue);
-    return /(^|\.)youtube\.com$/i.test(parsed.hostname) && parsed.pathname === "/watch";
+    return /(^|\.)youtube\.com$/i.test(parsed.hostname) && !!extractVideoIdFromUrl(urlValue);
   } catch (error) {
     return false;
   }

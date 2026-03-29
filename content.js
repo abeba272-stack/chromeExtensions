@@ -38,21 +38,31 @@
       .replace(/'/g, "&#39;");
   }
 
+  function getVideoId(urlValue = window.location.href) {
+    try {
+      const parsed = new URL(urlValue);
+
+      if (parsed.pathname === "/watch") {
+        return parsed.searchParams.get("v") || "";
+      }
+
+      if (parsed.pathname.startsWith("/shorts/")) {
+        return parsed.pathname.split("/shorts/")[1]?.split("/")[0] || "";
+      }
+
+      return "";
+    } catch (error) {
+      return "";
+    }
+  }
+
   function isWatchPage(urlValue = window.location.href) {
     try {
       const parsed = new URL(urlValue);
       const isYoutubeHost = /(^|\.)youtube\.com$/i.test(parsed.hostname);
-      return isYoutubeHost && parsed.pathname === "/watch" && !!parsed.searchParams.get("v");
+      return isYoutubeHost && !!getVideoId(urlValue);
     } catch (error) {
       return false;
-    }
-  }
-
-  function getVideoId(urlValue = window.location.href) {
-    try {
-      return new URL(urlValue).searchParams.get("v") || "";
-    } catch (error) {
-      return "";
     }
   }
 
@@ -140,6 +150,8 @@
     const title =
       getTextFromSelectors([
         "ytd-watch-metadata h1 yt-formatted-string",
+        "ytd-reel-video-renderer h2",
+        "ytd-reel-video-renderer #title",
         "h1.ytd-watch-metadata",
         "h1.title",
         "h1"
@@ -152,6 +164,7 @@
         "#owner #channel-name a",
         "ytd-watch-metadata #channel-name a",
         "ytd-video-owner-renderer #channel-name a",
+        "ytd-reel-player-overlay-renderer #channel-name a",
         "ytd-channel-name a"
       ]) ||
       getMetaContent('meta[name="author"]') ||

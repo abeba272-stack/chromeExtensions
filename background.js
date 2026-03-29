@@ -2,15 +2,29 @@ const LIBRARY_KEY = "wavedropLibrary";
 const ACTIVE_VIDEO_KEY = "wavedropActiveVideo";
 const EXTERNAL_TOOL_BASE_URL = "https://www.google.com/search?q=";
 
+function extractVideoIdFromUrl(urlValue = "") {
+  try {
+    const parsed = new URL(urlValue);
+
+    if (parsed.pathname === "/watch") {
+      return parsed.searchParams.get("v") || "";
+    }
+
+    if (parsed.pathname.startsWith("/shorts/")) {
+      return parsed.pathname.split("/shorts/")[1]?.split("/")[0] || "";
+    }
+
+    return "";
+  } catch (error) {
+    return "";
+  }
+}
+
 function isSupportedYouTubeUrl(urlValue = "") {
   try {
     const parsed = new URL(urlValue);
 
-    return (
-      /(^|\.)youtube\.com$/i.test(parsed.hostname) &&
-      parsed.pathname === "/watch" &&
-      !!parsed.searchParams.get("v")
-    );
+    return /(^|\.)youtube\.com$/i.test(parsed.hostname) && !!extractVideoIdFromUrl(urlValue);
   } catch (error) {
     return false;
   }
@@ -52,7 +66,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
 
   const tabs = await chrome.tabs.query({
-    url: ["https://www.youtube.com/*", "https://m.youtube.com/*"]
+    url: ["https://www.youtube.com/*", "https://m.youtube.com/*", "https://music.youtube.com/*"]
   });
 
   await Promise.all(tabs.map((tab) => ensureWaveDropInjected(tab.id, tab.url)));

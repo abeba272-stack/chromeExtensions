@@ -6,7 +6,8 @@
   "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "https://m.youtube.com/*"
+    "https://m.youtube.com/*",
+    "https://music.youtube.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -19,7 +20,8 @@
     {
       "matches": [
         "https://www.youtube.com/*",
-        "https://m.youtube.com/*"
+        "https://m.youtube.com/*",
+        "https://music.youtube.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
@@ -30,7 +32,8 @@
       "resources": ["styles.css"],
       "matches": [
         "https://www.youtube.com/*",
-        "https://m.youtube.com/*"
+        "https://m.youtube.com/*",
+        "https://music.youtube.com/*"
       ]
     }
   ]
