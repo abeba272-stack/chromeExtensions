@@ -12,7 +12,8 @@
     isSaved: false,
     feedback: "",
     feedbackTone: "info",
-    pendingAction: ""
+    pendingAction: "",
+    panelMode: "open"
   };
 
   let host = null;
@@ -34,8 +35,38 @@
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
+      .replace(/\"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function normalizePanelMode(value) {
+    return ["open", "minimized", "closed"].includes(value) ? value : "open";
+  }
+
+  function getPanelPreferenceKey(videoId = getVideoId()) {
+    return videoId ? `wavedrop:panel:${videoId}` : "wavedrop:panel:default";
+  }
+
+  function loadPanelMode(videoId = getVideoId()) {
+    try {
+      return normalizePanelMode(sessionStorage.getItem(getPanelPreferenceKey(videoId)));
+    } catch (error) {
+      return "open";
+    }
+  }
+
+  function persistPanelMode(mode, videoId = getVideoId()) {
+    try {
+      sessionStorage.setItem(getPanelPreferenceKey(videoId), normalizePanelMode(mode));
+    } catch (error) {
+      // Ignore storage failures in restricted contexts.
+    }
+  }
+
+  function setPanelMode(mode) {
+    state.panelMode = normalizePanelMode(mode);
+    persistPanelMode(state.panelMode, state.video?.videoId || getVideoId());
+    render();
   }
 
   function getVideoId(urlValue = window.location.href) {
@@ -73,18 +104,14 @@
     const remainingSeconds = safeSeconds % 60;
 
     if (hours > 0) {
-      return `${hours}:${String(minutes).padStart(2, "0")}:${String(
-        remainingSeconds
-      ).padStart(2, "0")}`;
+      return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
     }
 
     return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
   }
 
   function parseIsoDuration(value) {
-    const match = String(value || "").match(
-      /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i
-    );
+    const match = String(value || "").match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
 
     if (!match) {
       return "";
@@ -205,7 +232,6 @@
     host.style.top = "18px";
     host.style.right = "18px";
     host.style.zIndex = "2147483647";
-    host.style.width = "min(360px, calc(100vw - 24px))";
     host.style.pointerEvents = "auto";
 
     if (!host.parentNode) {
@@ -232,6 +258,24 @@
     }
 
     return mountNode;
+  }
+
+  function applyHostLayout() {
+    if (!host) {
+      return;
+    }
+
+    if (state.panelMode === "closed") {
+      host.style.width = "176px";
+      return;
+    }
+
+    if (state.panelMode === "minimized") {
+      host.style.width = "min(294px, calc(100vw - 24px))";
+      return;
+    }
+
+    host.style.width = "min(360px, calc(100vw - 24px))";
   }
 
   function destroyMountNode() {
@@ -421,6 +465,22 @@
   }
 
   function handleShadowClick(event) {
+    const controlButton = event.target.closest("button[data-control]");
+
+    if (controlButton) {
+      const control = controlButton.dataset.control;
+
+      if (control === "close") {
+        setPanelMode("closed");
+      } else if (control === "minimize") {
+        setPanelMode("minimized");
+      } else if (control === "open") {
+        setPanelMode("open");
+      }
+
+      return;
+    }
+
     const actionButton = event.target.closest("button[data-action]");
 
     if (!actionButton) {
@@ -430,26 +490,66 @@
     handleAction(actionButton.dataset.action);
   }
 
-  function render() {
-    if (!state.video || !isWatchPage()) {
-      destroyMountNode();
-      return;
-    }
+  function getWindowControlsMarkup() {
+    return `
+      <div class="wd-window-controls" aria-label="Overlay controls">
+        <button class="wd-window-dot wd-window-dot-red" data-control="close" aria-label="Hide WaveDrop"></button>
+        <button class="wd-window-dot wd-window-dot-yellow" data-control="minimize" aria-label="Minimize WaveDrop"></button>
+        <button class="wd-window-dot wd-window-dot-green" data-control="open" aria-label="Expand WaveDrop"></button>
+      </div>
+    `;
+  }
 
-    const root = ensureMountNode();
+  function renderClosedState() {
+    return `
+      <div class="wd-overlay-shell wd-overlay-shell-launcher">
+        <button class="wd-launcher-card" data-control="open" aria-label="Open WaveDrop">
+          <span class="wd-launcher-label">WaveDrop</span>
+          <span class="wd-launcher-meta">${escapeHtml(state.video.duration)}</span>
+        </button>
+      </div>
+    `;
+  }
+
+  function renderMinimizedState() {
+    return `
+      <div class="wd-overlay-shell">
+        <div class="wd-glow wd-glow-one"></div>
+        <section class="wd-overlay-panel wd-overlay-panel-minimized wd-glass-card wd-animate-in">
+          <div class="wd-panel-chrome">
+            ${getWindowControlsMarkup()}
+            <span class="wd-chip wd-chip-live">Minimized</span>
+          </div>
+          <button class="wd-mini-bar" data-control="open" aria-label="Expand WaveDrop">
+            <span class="wd-mini-title">WaveDrop</span>
+            <span class="wd-mini-track">${escapeHtml(state.video.title)}</span>
+          </button>
+        </section>
+      </div>
+    `;
+  }
+
+  function renderOpenState() {
     const actionIsPending = (action) => state.pendingAction === action;
 
-    root.innerHTML = `
+    return `
       <div class="wd-overlay-shell">
         <div class="wd-glow wd-glow-one"></div>
         <div class="wd-glow wd-glow-two"></div>
         <section class="wd-overlay-panel wd-glass-card wd-animate-in">
-          <div class="wd-panel-top">
-            <div>
-              <p class="wd-kicker">WaveDrop</p>
-              <h2 class="wd-panel-title">YouTube companion layer</h2>
-            </div>
+          <div class="wd-panel-chrome">
+            ${getWindowControlsMarkup()}
             <span class="wd-chip wd-chip-live">Watch page</span>
+          </div>
+
+          <div class="wd-panel-top">
+            <div class="wd-panel-intro">
+              <p class="wd-kicker">WaveDrop</p>
+              <h2 class="wd-panel-title">Midnight tape companion</h2>
+              <p class="wd-panel-mood">
+                Noir glass, neon bleed, and a quick local vault for the track in front of you.
+              </p>
+            </div>
           </div>
 
           <article class="wd-current-video">
@@ -480,13 +580,7 @@
               ${actionIsPending("external") ? "Opening..." : "Open in External Tool"}
             </button>
             <button class="wd-action-button" data-action="save">
-              ${
-                actionIsPending("save")
-                  ? "Saving..."
-                  : state.isSaved
-                    ? "Save to Library"
-                    : "Save to Library"
-              }
+              ${actionIsPending("save") ? "Saving..." : "Save to Library"}
             </button>
             <button class="wd-action-button" data-action="share">
               ${actionIsPending("share") ? "Sharing..." : "Share"}
@@ -497,9 +591,7 @@
             <p class="wd-note-copy">
               ${
                 state.feedback
-                  ? `<span class="wd-notice wd-notice-${escapeHtml(
-                      state.feedbackTone
-                    )}">${escapeHtml(state.feedback)}</span>`
+                  ? `<span class="wd-notice wd-notice-${escapeHtml(state.feedbackTone)}">${escapeHtml(state.feedback)}</span>`
                   : "Collect the link, hand it off, or pin it to your local library."
               }
             </p>
@@ -509,12 +601,35 @@
     `;
   }
 
+  function render() {
+    if (!state.video || !isWatchPage()) {
+      destroyMountNode();
+      return;
+    }
+
+    const root = ensureMountNode();
+    applyHostLayout();
+
+    if (state.panelMode === "closed") {
+      root.innerHTML = renderClosedState();
+      return;
+    }
+
+    if (state.panelMode === "minimized") {
+      root.innerHTML = renderMinimizedState();
+      return;
+    }
+
+    root.innerHTML = renderOpenState();
+  }
+
   async function refreshVideoState() {
     if (!isWatchPage()) {
       state.video = null;
       state.videoFingerprint = "";
       state.isSaved = false;
       state.pendingAction = "";
+      state.panelMode = "open";
       destroyMountNode();
       return;
     }
@@ -529,6 +644,11 @@
 
     state.video = nextVideo;
     state.videoFingerprint = nextFingerprint;
+
+    if (metadataChanged) {
+      state.panelMode = loadPanelMode(nextVideo.videoId);
+    }
+
     render();
 
     if (metadataChanged) {
