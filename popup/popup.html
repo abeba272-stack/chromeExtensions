@@ -11,14 +11,24 @@
     <main class="wd-popup-frame">
       <section class="wd-shell-surface wd-popup-surface">
         <header class="wd-window-bar wd-window-bar-popup">
-          <div class="wd-window-controls" aria-hidden="true">
-            <span class="wd-window-dot wd-window-dot-red"></span>
-            <span class="wd-window-dot wd-window-dot-yellow"></span>
-            <span class="wd-window-dot wd-window-dot-green"></span>
+          <div class="wd-popup-header-slot wd-popup-header-slot-left">
+            <div class="wd-window-controls" aria-hidden="true">
+              <span class="wd-window-dot wd-window-dot-red"></span>
+              <span class="wd-window-dot wd-window-dot-yellow"></span>
+              <span class="wd-window-dot wd-window-dot-green"></span>
+            </div>
           </div>
-          <div class="wd-header-wordmark">Juice WRLD</div>
-          <div class="wd-header-badge">
-            <span class="wd-mini-pill">Control Center</span>
+
+          <div class="wd-popup-header-center">
+            <div class="wd-header-wordmark wd-header-wordmark-popup">Juice WRLD</div>
+          </div>
+
+          <div class="wd-popup-header-slot wd-popup-header-slot-right">
+            <button class="wd-control-center-button" type="button" aria-label="Control center">
+              <span class="wd-control-center-dot"></span>
+              <span class="wd-control-center-dot"></span>
+              <span class="wd-control-center-dot"></span>
+            </button>
           </div>
         </header>
         <div id="wd-popup-root" class="wd-popup-scroll" aria-live="polite"></div>
