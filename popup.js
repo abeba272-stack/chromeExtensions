@@ -125,9 +125,7 @@ async function getTabContext(tab) {
   }
 
   try {
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "WAVEDROP_GET_VIDEO_CONTEXT"
-    });
+    const response = await requestVideoContext(tab);
 
     return {
       video: response?.data?.video || null,
@@ -140,6 +138,24 @@ async function getTabContext(tab) {
       isSaved: false,
       pageSupported: true
     };
+  }
+}
+
+async function requestVideoContext(tab) {
+  try {
+    return await chrome.tabs.sendMessage(tab.id, {
+      type: "WAVEDROP_GET_VIDEO_CONTEXT"
+    });
+  } catch (error) {
+    await chrome.runtime.sendMessage({
+      type: "WAVEDROP_ENSURE_INJECTION",
+      tabId: tab.id,
+      url: tab.url
+    });
+
+    return chrome.tabs.sendMessage(tab.id, {
+      type: "WAVEDROP_GET_VIDEO_CONTEXT"
+    });
   }
 }
 

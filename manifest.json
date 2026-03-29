@@ -3,7 +3,7 @@
   "name": "WaveDrop",
   "version": "1.0.0",
   "description": "A premium YouTube companion for collecting, sharing, and organizing video references.",
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://m.youtube.com/*"

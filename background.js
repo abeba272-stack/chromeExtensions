@@ -2,12 +2,60 @@ const LIBRARY_KEY = "wavedropLibrary";
 const ACTIVE_VIDEO_KEY = "wavedropActiveVideo";
 const EXTERNAL_TOOL_BASE_URL = "https://www.google.com/search?q=";
 
+function isSupportedYouTubeUrl(urlValue = "") {
+  try {
+    const parsed = new URL(urlValue);
+
+    return (
+      /(^|\.)youtube\.com$/i.test(parsed.hostname) &&
+      parsed.pathname === "/watch" &&
+      !!parsed.searchParams.get("v")
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+async function ensureWaveDropInjected(tabId, urlValue = "") {
+  if (!tabId || !isSupportedYouTubeUrl(urlValue)) {
+    return false;
+  }
+
+  try {
+    const pingResponse = await chrome.tabs.sendMessage(tabId, {
+      type: "WAVEDROP_PING"
+    });
+
+    if (pingResponse?.ok) {
+      return true;
+    }
+  } catch (error) {
+    // Ignore lookup failures and try a direct injection.
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"]
+    });
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   const stored = await chrome.storage.local.get([LIBRARY_KEY]);
 
   if (!Array.isArray(stored[LIBRARY_KEY])) {
     await chrome.storage.local.set({ [LIBRARY_KEY]: [] });
   }
+
+  const tabs = await chrome.tabs.query({
+    url: ["https://www.youtube.com/*", "https://m.youtube.com/*"]
+  });
+
+  await Promise.all(tabs.map((tab) => ensureWaveDropInjected(tab.id, tab.url)));
 });
 
 function normalizeText(value, fallback = "") {
@@ -131,6 +179,14 @@ async function removeVideo(videoId, url) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     switch (message?.type) {
+      case "WAVEDROP_ENSURE_INJECTION": {
+        sendResponse({
+          ok: true,
+          data: await ensureWaveDropInjected(message.tabId, message.url)
+        });
+        return;
+      }
+
       case "WAVEDROP_GET_STATE": {
         sendResponse({ ok: true, data: await getState() });
         return;
@@ -192,4 +248,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   });
 
   return true;
+});
+
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete") {
+    return;
+  }
+
+  ensureWaveDropInjected(tabId, tab?.url);
+});
+
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    await ensureWaveDropInjected(tabId, tab?.url);
+  } catch (error) {
+    // Ignore tab lookup failures.
+  }
 });

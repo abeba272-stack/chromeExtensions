@@ -510,20 +510,25 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message?.type !== "WAVEDROP_GET_VIDEO_CONTEXT") {
-      return false;
+    if (message?.type === "WAVEDROP_PING") {
+      sendResponse({ ok: true });
+      return true;
     }
 
-    sendResponse({
-      ok: true,
-      data: {
-        video: state.video,
-        isSaved: state.isSaved,
-        pageSupported: isWatchPage()
-      }
-    });
+    if (message?.type === "WAVEDROP_GET_VIDEO_CONTEXT") {
+      sendResponse({
+        ok: true,
+        data: {
+          video: state.video,
+          isSaved: state.isSaved,
+          pageSupported: isWatchPage()
+        }
+      });
 
-    return true;
+      return true;
+    }
+
+    return false;
   });
 
   const observer = new MutationObserver(() => {
