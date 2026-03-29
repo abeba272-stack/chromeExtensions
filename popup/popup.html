@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WaveDrop</title>
+    <link rel="stylesheet" href="../shared/theme.css" />
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body class="wd-popup-page">
+    <main class="wd-popup-frame">
+      <section class="wd-shell-surface wd-popup-surface">
+        <header class="wd-window-bar wd-window-bar-popup">
+          <div class="wd-window-controls" aria-hidden="true">
+            <span class="wd-window-dot wd-window-dot-red"></span>
+            <span class="wd-window-dot wd-window-dot-yellow"></span>
+            <span class="wd-window-dot wd-window-dot-green"></span>
+          </div>
+          <div class="wd-header-wordmark">Juice WRLD</div>
+          <div class="wd-header-badge">
+            <span class="wd-mini-pill">Control Center</span>
+          </div>
+        </header>
+        <div id="wd-popup-root" class="wd-popup-scroll" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script src="../shared/constants.js"></script>
+    <script src="../shared/messages.js"></script>
+    <script src="../shared/storage.js"></script>
+    <script src="./popup.js"></script>
+  </body>
+</html>

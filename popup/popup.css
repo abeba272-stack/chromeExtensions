@@ -1,0 +1,76 @@
+html,
+body {
+  width: 432px;
+  min-width: 432px;
+  min-height: 664px;
+  margin: 0;
+  overflow: hidden;
+}
+
+body.wd-popup-page {
+  background: transparent;
+}
+
+.wd-popup-frame {
+  min-height: 664px;
+  padding: 14px;
+}
+
+.wd-popup-surface {
+  min-height: 636px;
+}
+
+.wd-window-bar-popup {
+  padding-right: 20px;
+}
+
+.wd-popup-scroll {
+  max-height: calc(664px - 76px);
+  overflow-y: auto;
+  padding: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.wd-popup-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.wd-popup-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.wd-popup-shell-body {
+  display: grid;
+  gap: 14px;
+}
+
+.wd-video-card-popup {
+  grid-template-columns: 132px 1fr;
+}
+
+.wd-video-frame-popup {
+  min-height: 104px;
+}
+
+.wd-actions-card-popup .wd-primary-actions-popup {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wd-settings-card .wd-secondary-actions {
+  margin-top: 12px;
+}
+
+@media (max-width: 460px) {
+  html,
+  body {
+    width: 402px;
+    min-width: 402px;
+  }
+
+  .wd-video-card-popup,
+  .wd-actions-card-popup .wd-primary-actions-popup {
+    grid-template-columns: 1fr;
+  }
+}

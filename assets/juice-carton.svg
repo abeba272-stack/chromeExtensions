@@ -1,0 +1,25 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wdCartonBody" x1="20" y1="10" x2="102" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64F3FF"/>
+      <stop offset="0.34" stop-color="#49B6FF"/>
+      <stop offset="0.68" stop-color="#D948FF"/>
+      <stop offset="1" stop-color="#FF5EBD"/>
+    </linearGradient>
+    <linearGradient id="wdCartonStroke" x1="28" y1="14" x2="96" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE7F6"/>
+      <stop offset="1" stop-color="#D6F5FF"/>
+    </linearGradient>
+  </defs>
+  <path d="M42 16L70 12L94 28V102L34 112L18 92V34L42 16Z" fill="url(#wdCartonBody)" fill-opacity="0.92"/>
+  <path d="M42 16L70 12L94 28V102L34 112L18 92V34L42 16Z" stroke="url(#wdCartonStroke)" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M42 16V48L18 34" stroke="url(#wdCartonStroke)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M42 48L94 28" stroke="url(#wdCartonStroke)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M78 10L90 32" stroke="#FFE9F3" stroke-width="5" stroke-linecap="round"/>
+  <path d="M66 52C66 45.3726 71.3726 40 78 40H83C89.6274 40 95 45.3726 95 52V74C95 80.6274 89.6274 86 83 86H78C71.3726 86 66 80.6274 66 74V52Z" fill="#090518" fill-opacity="0.26"/>
+  <path d="M66 52C66 45.3726 71.3726 40 78 40H83C89.6274 40 95 45.3726 95 52V74C95 80.6274 89.6274 86 83 86H78C71.3726 86 66 80.6274 66 74V52Z" stroke="#F8F6FB" stroke-opacity="0.75" stroke-width="4"/>
+  <path d="M38 66C44 58 54 56 60 66" stroke="#F8F6FB" stroke-opacity="0.84" stroke-width="4" stroke-linecap="round"/>
+  <path d="M43 84C47 88 53 90 60 88" stroke="#F8F6FB" stroke-opacity="0.84" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="44" cy="58" r="3.5" fill="#111018"/>
+  <circle cx="58" cy="58" r="3.5" fill="#111018"/>
+</svg>

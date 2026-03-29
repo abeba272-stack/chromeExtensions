@@ -1,35 +1,47 @@
 # WaveDrop
 
-WaveDrop is a Manifest V3 Chrome Extension for YouTube pages. It acts as a companion layer for collecting video context, copying links, handing videos off to an external workflow, sharing, and saving references into a local library.
+WaveDrop is a Manifest V3 Chrome Extension built around a floating YouTube mini-window and a matching popup control center.
 
-This project does not download or bypass YouTube protections. All actions stay within standard browser and extension capabilities.
+## Product Shape
 
-## Features
+- `content/` drives the injected floating panel on YouTube watch pages.
+- `popup/` contains the compact control center UI.
+- `background/` owns task routing, persistence, provider orchestration, and browser download handoff.
+- `shared/` contains storage, constants, messages, and the unified visual system.
+- `assets/` holds reusable decorative symbols like the carton emblem.
 
-- automatic detection of YouTube watch pages
-- floating glassmorphism overlay with current video details
-- copy link, open external handoff tab, save to library, and share actions
-- local library stored in `chrome.storage.local`
-- popup view for the current video plus saved items
+## Download Architecture
 
-## Files
+WaveDrop uses a provider-based task flow for MP3 and MP4 actions.
 
-- `manifest.json` - Manifest V3 setup
-- `content.js` - YouTube page detection and injected overlay
-- `background.js` - storage orchestration and external handoff action
-- `popup.html` - popup shell
-- `popup.js` - popup rendering and library interactions
-- `styles.css` - shared visual system for popup and overlay
+- The UI starts a task through the background worker.
+- The background worker persists task state in `chrome.storage.local`.
+- A local bridge endpoint can be configured in the popup.
+- If the bridge returns a final file URL, WaveDrop hands it to `chrome.downloads`.
+- External tool handoff remains available as a separate action.
+
+The extension does not embed a direct YouTube-ripping implementation in the UI layer itself.
 
 ## Load Unpacked
 
 1. Open `chrome://extensions/`.
 2. Enable Developer mode.
 3. Click Load unpacked.
-4. Select this folder.
+4. Select this repository folder.
+5. Reload the extension after code changes.
 
-## Notes
+## Key Files
 
-- The overlay is only visible on standard YouTube video URLs such as `https://www.youtube.com/watch?v=...`.
-- Saved items stay local to the browser profile through `chrome.storage.local`.
-- The external tool action opens a neutral browser handoff tab seeded with the current video metadata.
+- `manifest.json`
+- `background/worker.js`
+- `background/providers.js`
+- `content/injector.js`
+- `content/panel.js`
+- `content/panel.css`
+- `popup/popup.html`
+- `popup/popup.js`
+- `popup/popup.css`
+- `shared/constants.js`
+- `shared/messages.js`
+- `shared/storage.js`
+- `shared/theme.css`
