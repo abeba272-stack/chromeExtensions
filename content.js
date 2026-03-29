@@ -1,760 +1,543 @@
 (function () {
-  if (window.__BROKEN_WEBSITE_DETECTOR_LOADED__) {
+  if (window.__WAVEDROP_LOADED__) {
     return;
   }
 
-  window.__BROKEN_WEBSITE_DETECTOR_LOADED__ = true;
+  window.__WAVEDROP_LOADED__ = true;
 
-  const CTA_TERMS = [
-    "contact",
-    "book",
-    "buy",
-    "shop",
-    "get started",
-    "request",
-    "call",
-    "schedule",
-    "quote",
-    "consultation",
-    "demo",
-    "start",
-    "sign up",
-    "learn more"
-  ];
+  const ROOT_ID = "wavedrop-overlay-root";
+  const state = {
+    video: null,
+    videoFingerprint: "",
+    isSaved: false,
+    feedback: "",
+    feedbackTone: "info",
+    pendingAction: ""
+  };
 
-  const TESTIMONIAL_TERMS = [
-    "review",
-    "reviews",
-    "testimonial",
-    "testimonials",
-    "what our clients say",
-    "customer feedback",
-    "happy clients",
-    "success stories"
-  ];
+  let host = null;
+  let shadow = null;
+  let mountNode = null;
+  let refreshTimer = null;
+  let feedbackTimer = null;
 
-  const TRUST_TERMS = [
-    "certified",
-    "certification",
-    "award",
-    "awards",
-    "trusted by",
-    "partner",
-    "partners",
-    "client logos",
-    "years of experience",
-    "guarantee",
-    "guaranteed",
-    "secure checkout",
-    "insured",
-    "licensed",
-    "verified",
-    "accredited"
-  ];
-
-  const PRICING_TERMS = [
-    "pricing",
-    "plans",
-    "packages",
-    "per month",
-    "starting at",
-    "subscription",
-    "quote",
-    "$",
-    "€"
-  ];
-
-  const FAQ_TERMS = ["faq", "frequently asked", "common questions"];
-  const SOCIAL_PLATFORMS = [
-    "facebook.com",
-    "instagram.com",
-    "linkedin.com",
-    "x.com",
-    "twitter.com",
-    "youtube.com",
-    "tiktok.com",
-    "pinterest.com"
-  ];
-
-  function clamp(value, minimum, maximum) {
-    return Math.min(Math.max(value, minimum), maximum);
-  }
-
-  function normalizeWhitespace(text) {
-    return (text || "").replace(/\s+/g, " ").trim();
-  }
-
-  function isVisible(element) {
-    if (!element) {
-      return false;
-    }
-
-    const style = window.getComputedStyle(element);
-    if (
-      style.display === "none" ||
-      style.visibility === "hidden" ||
-      style.opacity === "0"
-    ) {
-      return false;
-    }
-
-    const rect = element.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
-  }
-
-  function getVisibleText(element) {
-    return normalizeWhitespace(element?.innerText || element?.textContent || "");
-  }
-
-  function normalizeFontFamily(fontFamily) {
-    const firstFamily = (fontFamily || "")
-      .split(",")[0]
-      .replace(/["']/g, "")
+  function normalizeText(value, fallback = "") {
+    const normalized = String(value ?? "")
+      .replace(/\s+/g, " ")
       .trim();
 
-    return firstFamily.toLowerCase();
+    return normalized || fallback;
   }
 
-  function parseRgb(colorValue) {
-    if (!colorValue) {
-      return null;
-    }
-
-    const rgbaMatch = colorValue.match(/rgba?\(([^)]+)\)/i);
-    if (!rgbaMatch) {
-      return null;
-    }
-
-    const parts = rgbaMatch[1]
-      .split(",")
-      .map((part) => Number.parseFloat(part.trim()))
-      .filter((part) => Number.isFinite(part));
-
-    if (parts.length < 3) {
-      return null;
-    }
-
-    return {
-      r: clamp(parts[0], 0, 255),
-      g: clamp(parts[1], 0, 255),
-      b: clamp(parts[2], 0, 255),
-      a: parts.length > 3 ? clamp(parts[3], 0, 1) : 1
-    };
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
-  function getEffectiveBackgroundColor(element) {
-    let current = element;
-
-    while (current && current !== document.documentElement) {
-      const color = parseRgb(window.getComputedStyle(current).backgroundColor);
-      if (color && color.a > 0.05) {
-        return color;
-      }
-
-      current = current.parentElement;
-    }
-
-    return { r: 255, g: 255, b: 255, a: 1 };
-  }
-
-  function relativeLuminance(channel) {
-    const normalized = channel / 255;
-    return normalized <= 0.03928
-      ? normalized / 12.92
-      : Math.pow((normalized + 0.055) / 1.055, 2.4);
-  }
-
-  function getContrastRatio(foreground, background) {
-    const foregroundLum =
-      0.2126 * relativeLuminance(foreground.r) +
-      0.7152 * relativeLuminance(foreground.g) +
-      0.0722 * relativeLuminance(foreground.b);
-
-    const backgroundLum =
-      0.2126 * relativeLuminance(background.r) +
-      0.7152 * relativeLuminance(background.g) +
-      0.0722 * relativeLuminance(background.b);
-
-    const lighter = Math.max(foregroundLum, backgroundLum);
-    const darker = Math.min(foregroundLum, backgroundLum);
-
-    return (lighter + 0.05) / (darker + 0.05);
-  }
-
-  function textContains(text, terms) {
-    const normalized = (text || "").toLowerCase();
-    return terms.some((term) => normalized.includes(term));
-  }
-
-  function matchesCta(text) {
-    const normalized = (text || "").toLowerCase();
-    return CTA_TERMS.some((term) => normalized.includes(term));
-  }
-
-  function collectInteractiveElements() {
-    return Array.from(
-      document.querySelectorAll(
-        'a[href], button, input[type="submit"], input[type="button"], [role="button"]'
-      )
-    )
-      .filter(isVisible)
-      .map((element) => {
-        const rect = element.getBoundingClientRect();
-        const text = getVisibleText(element) || element.getAttribute("aria-label") || "";
-        return {
-          tagName: element.tagName.toLowerCase(),
-          text: normalizeWhitespace(text).slice(0, 120),
-          left: rect.left,
-          right: rect.right,
-          top: rect.top,
-          bottom: rect.bottom,
-          width: rect.width,
-          height: rect.height
-        };
-      })
-      .filter((item) => item.text || item.tagName === "button");
-  }
-
-  function analyzeHeroSection(viewportHeight) {
-    // Hero detection is intentionally heuristic: version 1 looks for a large opening block
-    // that combines a headline with support copy, CTA presence, media, or a large footprint.
-    const candidateSelectors = [
-      "header",
-      "main > section",
-      "main > div",
-      "section",
-      "article",
-      "body > div"
-    ];
-
-    const candidates = Array.from(document.querySelectorAll(candidateSelectors.join(",")))
-      .filter(isVisible)
-      .filter((element) => {
-        const rect = element.getBoundingClientRect();
-        return rect.top < viewportHeight && rect.bottom > 0 && rect.height > 80;
-      })
-      .slice(0, 24);
-
-    let best = {
-      score: 0,
-      hasHeading: false,
-      hasSupportingText: false,
-      hasCta: false,
-      hasMedia: false,
-      hasLargeFootprint: false
-    };
-
-    for (const element of candidates) {
-      const rect = element.getBoundingClientRect();
-      const heading = Array.from(element.querySelectorAll("h1, h2, h3")).find(
-        (node) => isVisible(node) && getVisibleText(node).length >= 12
-      );
-      const supportingText = Array.from(element.querySelectorAll("p, div, span")).find(
-        (node) => isVisible(node) && getVisibleText(node).length >= 40
-      );
-      const cta = Array.from(
-        element.querySelectorAll(
-          'a[href], button, input[type="submit"], input[type="button"], [role="button"]'
-        )
-      ).find((node) => isVisible(node) && matchesCta(getVisibleText(node) || node.getAttribute("aria-label") || ""));
-      const media =
-        element.querySelector("img, picture, video, svg, canvas") ||
-        window.getComputedStyle(element).backgroundImage !== "none";
-      const hasLargeFootprint =
-        rect.height >= viewportHeight * 0.35 || rect.width >= window.innerWidth * 0.85;
-
-      const score =
-        (heading ? 1.35 : 0) +
-        (supportingText ? 0.75 : 0) +
-        (cta ? 0.95 : 0) +
-        (media ? 0.8 : 0) +
-        (hasLargeFootprint ? 0.55 : 0);
-
-      if (score > best.score) {
-        best = {
-          score,
-          hasHeading: Boolean(heading),
-          hasSupportingText: Boolean(supportingText),
-          hasCta: Boolean(cta),
-          hasMedia: Boolean(media),
-          hasLargeFootprint
-        };
-      }
-    }
-
-    return {
-      hasHero: best.score >= 2.35,
-      ...best
-    };
-  }
-
-  function getHeadingSignals() {
-    const headings = Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, h6"))
-      .filter(isVisible)
-      .map((element) => {
-        const rect = element.getBoundingClientRect();
-        const style = window.getComputedStyle(element);
-        return {
-          level: Number.parseInt(element.tagName.slice(1), 10),
-          text: getVisibleText(element).slice(0, 180),
-          top: rect.top,
-          fontSize: Number.parseFloat(style.fontSize) || 0
-        };
-      });
-
-    const levelCounts = headings.reduce(
-      (accumulator, heading) => {
-        accumulator[`h${heading.level}`] += 1;
-        return accumulator;
-      },
-      { h1: 0, h2: 0, h3: 0, h4: 0, h5: 0, h6: 0 }
-    );
-
-    let skipCount = 0;
-    for (let index = 1; index < headings.length; index += 1) {
-      if (headings[index].level - headings[index - 1].level > 1) {
-        skipCount += 1;
-      }
-    }
-
-    const weakStructure =
-      levelCounts.h1 === 0 ||
-      skipCount >= 2 ||
-      (levelCounts.h1 >= 1 && levelCounts.h2 === 0 && headings.length >= 3);
-
-    return {
-      headings,
-      levelCounts,
-      weakStructure
-    };
-  }
-
-  function getTypographySignals() {
-    const textElements = Array.from(
-      document.querySelectorAll("p, li, span, a, button, h1, h2, h3, h4, h5, h6")
-    )
-      .filter(isVisible)
-      .slice(0, 180);
-
-    const fontFamilies = new Set();
-    const headingSizes = [];
-    const bodySizes = [];
-    let contrastRiskCount = 0;
-    let contrastSampleCount = 0;
-
-    for (const element of textElements) {
-      const text = getVisibleText(element);
-      if (text.length < 4) {
-        continue;
-      }
-
-      const style = window.getComputedStyle(element);
-      const rect = element.getBoundingClientRect();
-      const fontSize = Number.parseFloat(style.fontSize) || 0;
-      const fontFamily = normalizeFontFamily(style.fontFamily);
-      if (fontFamily) {
-        fontFamilies.add(fontFamily);
-      }
-
-      if (/^h[1-6]$/i.test(element.tagName)) {
-        headingSizes.push(fontSize);
-      } else if (rect.width > 90) {
-        bodySizes.push(fontSize);
-      }
-
-      if (contrastSampleCount < 80) {
-        const foreground = parseRgb(style.color);
-        const background = getEffectiveBackgroundColor(element);
-        if (foreground && background) {
-          contrastSampleCount += 1;
-          const contrastRatio = getContrastRatio(foreground, background);
-          if (contrastRatio < 4.5) {
-            contrastRiskCount += 1;
-          }
-        }
-      }
-    }
-
-    const averageBodyFontSize =
-      bodySizes.length > 0
-        ? bodySizes.reduce((sum, value) => sum + value, 0) / bodySizes.length
-        : 0;
-
-    const maxHeadingSize = headingSizes.length > 0 ? Math.max(...headingSizes) : 0;
-    const hasVisualHierarchy =
-      maxHeadingSize >= averageBodyFontSize + 8 && headingSizes.length > 0;
-
-    return {
-      fontFamilies: Array.from(fontFamilies),
-      fontFamilyCount: fontFamilies.size,
-      averageBodyFontSize: Number(averageBodyFontSize.toFixed(1)),
-      maxHeadingSize: Number(maxHeadingSize.toFixed(1)),
-      contrastRiskCount,
-      contrastSampleCount,
-      hasVisualHierarchy
-    };
-  }
-
-  function getContactSignals(bodyText) {
-    const emailPattern =
-      /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
-    const phonePattern =
-      /(?:\+\d{1,3}[\s().-]*)?(?:\(?\d{2,4}\)?[\s().-]*)?\d{3}[\s.-]?\d{3,4}\b/;
-    const addressPattern =
-      /\b\d{1,5}\s+[A-Za-z0-9.\-'\s]{2,40}\s(?:street|st|road|rd|avenue|ave|boulevard|blvd|lane|ln|drive|dr|way|court|ct|place|pl|suite|ste)\b/i;
-
-    const mailtoLinks = Array.from(document.querySelectorAll('a[href^="mailto:"]'));
-    const telLinks = Array.from(document.querySelectorAll('a[href^="tel:"]'));
-    const contactForms = Array.from(document.forms).filter((form) => {
-      const formText = getVisibleText(form).toLowerCase();
-      return (
-        isVisible(form) &&
-        form.querySelector('input[type="email"], input[type="tel"], textarea') &&
-        (formText.includes("contact") || formText.includes("message") || formText.includes("quote"))
-      );
-    });
-
-    const bodyTextLower = bodyText.toLowerCase();
-    const socialLinks = Array.from(document.querySelectorAll('a[href^="http"]'))
-      .map((anchor) => anchor.href)
-      .filter((href) => SOCIAL_PLATFORMS.some((platform) => href.includes(platform)));
-
-    const schemaScripts = Array.from(
-      document.querySelectorAll('script[type="application/ld+json"]')
-    )
-      .map((script) => script.textContent || "")
-      .join("\n")
-      .toLowerCase();
-
-    const serviceTerms = [
-      "plumber",
-      "dentist",
-      "law firm",
-      "clinic",
-      "contractor",
-      "repair",
-      "roofing",
-      "salon",
-      "agency",
-      "studio",
-      "restaurant",
-      "cafe",
-      "home services"
-    ];
-
-    const localKeywords = ["visit us", "our office", "serving", "locations", "find us", "hours"];
-
-    return {
-      hasEmail: mailtoLinks.length > 0 || emailPattern.test(bodyText),
-      hasPhone: telLinks.length > 0 || phonePattern.test(bodyText),
-      hasAddress: addressPattern.test(bodyText) || schemaScripts.includes("localbusiness"),
-      hasContactForm: contactForms.length > 0,
-      socialLinkCount: socialLinks.length,
-      socialPlatforms: Array.from(
-        new Set(
-          socialLinks
-            .map((href) => SOCIAL_PLATFORMS.find((platform) => href.includes(platform)) || "")
-            .filter(Boolean)
-            .map((href) => href.replace(".com", ""))
-        )
-      ),
-      likelyLocalBusiness:
-        schemaScripts.includes("localbusiness") ||
-        (serviceTerms.some((term) => bodyTextLower.includes(term)) &&
-          (localKeywords.some((term) => bodyTextLower.includes(term)) ||
-            phonePattern.test(bodyText))),
-      looksCommercial:
-        /(?:services|pricing|book|quote|shop|buy|plans|packages|consultation|demo)/i.test(
-          bodyText
-        )
-    };
-  }
-
-  function getTrustSignals(bodyText) {
-    const lowerText = bodyText.toLowerCase();
-    const starPattern = /(?:4\.\d|5\.0)\s*\/\s*5|★★★★★|⭐/;
-
-    const testimonialByDom =
-      document.querySelector('[class*="testimonial"], [id*="testimonial"], blockquote') !== null;
-    const trustByDom =
-      document.querySelector('[class*="partner"], [class*="client-logo"], [class*="badge"]') !== null;
-    const faqByDom =
-      document.querySelector("details, [aria-expanded], [class*='faq'], [id*='faq']") !== null;
-
-    const hasTestimonials = testimonialByDom || textContains(lowerText, TESTIMONIAL_TERMS) || starPattern.test(bodyText);
-    const hasTrustSignals = trustByDom || textContains(lowerText, TRUST_TERMS);
-    const hasPricing = textContains(lowerText, PRICING_TERMS);
-    const hasFaq = faqByDom || textContains(lowerText, FAQ_TERMS);
-    const hasSocialProof =
-      hasTestimonials ||
-      /trusted by|clients include|used by|over \d+ clients|over \d+ customers|case study/i.test(bodyText);
-
-    return {
-      hasTestimonials,
-      hasTrustSignals,
-      hasPricing,
-      hasFaq,
-      hasSocialProof
-    };
-  }
-
-  function getImageSignals() {
-    const images = Array.from(document.images);
-    const missingAltImages = images.filter((image) => {
-      const alt = image.getAttribute("alt");
-      const rect = image.getBoundingClientRect();
-      const isMeaningfulSize = rect.width >= 80 && rect.height >= 80;
-      return isMeaningfulSize && (!image.hasAttribute("alt") || normalizeWhitespace(alt) === "");
-    });
-
-    return {
-      imageCount: images.length,
-      missingAltCount: missingAltImages.length
-    };
-  }
-
-  function getFormSignals() {
-    const controls = Array.from(
-      document.querySelectorAll("input, select, textarea")
-    ).filter((control) => {
-      const type = (control.getAttribute("type") || "").toLowerCase();
-      return type !== "hidden" && !control.disabled && isVisible(control);
-    });
-
-    const unlabeledControls = controls.filter((control) => {
-      const id = control.id;
-      const hasForLabel = id
-        ? document.querySelector(`label[for="${CSS.escape(id)}"]`) !== null
-        : false;
-      const wrappedByLabel = control.closest("label") !== null;
-      const ariaLabel = control.getAttribute("aria-label");
-      const ariaLabelledBy = control.getAttribute("aria-labelledby");
-      return !hasForLabel && !wrappedByLabel && !ariaLabel && !ariaLabelledBy;
-    });
-
-    return {
-      formCount: document.forms.length,
-      controlCount: controls.length,
-      unlabeledControlCount: unlabeledControls.length
-    };
-  }
-
-  function getTechnicalSignals() {
-    const navigationEntry = performance.getEntriesByType("navigation")[0];
-    let domContentLoadedMs = null;
-    let loadMs = null;
-
-    // This is a lightweight performance estimate, not a Lighthouse replacement.
-    if (navigationEntry) {
-      domContentLoadedMs = Math.round(
-        navigationEntry.domContentLoadedEventEnd - navigationEntry.startTime
-      );
-      loadMs = Math.round(navigationEntry.loadEventEnd - navigationEntry.startTime);
-    } else if (performance.timing) {
-      const timing = performance.timing;
-      domContentLoadedMs =
-        timing.domContentLoadedEventEnd && timing.navigationStart
-          ? timing.domContentLoadedEventEnd - timing.navigationStart
-          : null;
-      loadMs =
-        timing.loadEventEnd && timing.navigationStart
-          ? timing.loadEventEnd - timing.navigationStart
-          : null;
-    }
-
-    return {
-      scriptCount: document.scripts.length,
-      stylesheetCount:
-        document.querySelectorAll('link[rel="stylesheet"], style').length,
-      domNodeCount: document.getElementsByTagName("*").length,
-      domContentLoadedMs,
-      loadMs,
-      consoleErrorsAccessible: false,
-      consoleErrorCount: null
-    };
-  }
-
-  function getMobileSignals(interactiveElements, typographySignals) {
-    const viewportWidth = window.innerWidth;
-    const docWidth = document.documentElement.scrollWidth;
-    const visibleButtons = interactiveElements.filter((item) => item.top < window.innerHeight * 1.2);
-    const closeButtons = [];
-
-    for (let index = 0; index < visibleButtons.length; index += 1) {
-      for (let compareIndex = index + 1; compareIndex < visibleButtons.length; compareIndex += 1) {
-        const first = visibleButtons[index];
-        const second = visibleButtons[compareIndex];
-        const horizontalGap =
-          first.right < second.left
-            ? second.left - first.right
-            : second.right < first.left
-              ? first.left - second.right
-              : 0;
-        const verticalGap =
-          first.bottom < second.top
-            ? second.top - first.bottom
-            : second.bottom < first.top
-              ? first.top - second.bottom
-              : 0;
-
-        if (horizontalGap < 8 && verticalGap < 12) {
-          closeButtons.push([first.text, second.text]);
-        }
-        if (closeButtons.length >= 8) {
-          break;
-        }
-      }
-      if (closeButtons.length >= 8) {
-        break;
-      }
-    }
-
-    const elementsExceedingViewport = Array.from(document.querySelectorAll("body *"))
-      .filter(isVisible)
-      .filter((element) => {
-        const rect = element.getBoundingClientRect();
-        return rect.width > viewportWidth + 4;
-      })
-      .slice(0, 12);
-
-    const fixedWidthContainers = Array.from(document.querySelectorAll("div, section, article, main"))
-      .filter(isVisible)
-      .filter((element) => {
-        const style = window.getComputedStyle(element);
-        const width = Number.parseFloat(style.width) || 0;
-        const minWidth = Number.parseFloat(style.minWidth) || 0;
-        return width > viewportWidth + 4 || minWidth > viewportWidth + 4;
-      })
-      .slice(0, 12);
-
-    return {
-      viewportWidth,
-      documentWidth: docWidth,
-      hasHorizontalOverflowRisk: docWidth > viewportWidth + 4,
-      smallTouchTargetCount: visibleButtons.filter((button) => button.width < 44 || button.height < 44)
-        .length,
-      buttonsTooCloseCount: closeButtons.length,
-      smallMobileTextRisk:
-        typographySignals.averageBodyFontSize > 0 &&
-        typographySignals.averageBodyFontSize < 15.5,
-      elementsExceedingViewportCount: elementsExceedingViewport.length,
-      fixedWidthContainerCount: fixedWidthContainers.length
-    };
-  }
-
-  function getLinkSignals() {
-    const origin = window.location.origin;
-    const internalLinks = Array.from(document.querySelectorAll("a[href]"))
-      .map((anchor) => {
-        try {
-          return new URL(anchor.getAttribute("href"), window.location.href);
-        } catch (error) {
-          return null;
-        }
-      })
-      .filter(Boolean)
-      .filter((url) => url.origin === origin)
-      .filter((url) => !url.hash || url.pathname !== window.location.pathname)
-      .map((url) => url.href.split("#")[0]);
-
-    return {
-      totalInternalLinks: new Set(internalLinks).size,
-      sampleInternalLinks: Array.from(new Set(internalLinks)).slice(0, 25)
-    };
-  }
-
-  function getMetadata() {
-    const title = document.title || "";
-    const metaDescription =
-      document.querySelector('meta[name="description"]')?.getAttribute("content") || "";
-    const viewport =
-      document.querySelector('meta[name="viewport"]')?.getAttribute("content") || "";
-    const canonical =
-      document.querySelector('link[rel="canonical"]')?.getAttribute("href") || "";
-    const lang = document.documentElement.getAttribute("lang") || "";
-    const ogTags = document.querySelectorAll('meta[property^="og:"]').length;
-
-    return {
-      url: window.location.href,
-      origin: window.location.origin,
-      title: normalizeWhitespace(title),
-      metaDescription: normalizeWhitespace(metaDescription),
-      lang: normalizeWhitespace(lang),
-      viewportMeta: Boolean(viewport),
-      viewportContent: viewport,
-      canonical,
-      openGraphTagCount: ogTags
-    };
-  }
-
-  function buildSnapshot() {
-    if (!document.documentElement || !document.body) {
-      throw new Error("This page does not expose a readable DOM.");
-    }
-
-    const bodyText = normalizeWhitespace(document.body.innerText || "").slice(0, 150000);
-    const metadata = getMetadata();
-    const headingSignals = getHeadingSignals();
-    const typographySignals = getTypographySignals();
-    const interactiveElements = collectInteractiveElements();
-    const heroSignals = analyzeHeroSection(window.innerHeight);
-    const contactSignals = getContactSignals(bodyText);
-    const trustSignals = getTrustSignals(bodyText);
-    const imageSignals = getImageSignals();
-    const formSignals = getFormSignals();
-    const technicalSignals = getTechnicalSignals();
-    const mobileSignals = getMobileSignals(interactiveElements, typographySignals);
-    const linkSignals = getLinkSignals();
-
-    const ctaElementsAboveFold = interactiveElements.filter(
-      (item) => item.bottom > 0 && item.top < window.innerHeight * 0.92 && matchesCta(item.text)
-    );
-
-    const interactiveAboveFoldCount = interactiveElements.filter(
-      (item) => item.bottom > 0 && item.top < window.innerHeight
-    ).length;
-
-    return {
-      pageInfo: {
-        ...metadata,
-        analysisTimestamp: new Date().toISOString()
-      },
-      rawSignals: {
-        headings: headingSignals,
-        hero: heroSignals,
-        typography: typographySignals,
-        cta: {
-          matchesAboveFold: ctaElementsAboveFold.length,
-          hasPrimaryCtaAboveFold: ctaElementsAboveFold.length > 0,
-          interactiveAboveFoldCount
-        },
-        contact: contactSignals,
-        trust: trustSignals,
-        images: imageSignals,
-        forms: formSignals,
-        technical: technicalSignals,
-        mobile: mobileSignals,
-        links: linkSignals,
-        bodyTextSampleLength: bodyText.length
-      }
-    };
-  }
-
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message?.type !== "BWD_ANALYZE_PAGE") {
+  function isWatchPage(urlValue = window.location.href) {
+    try {
+      const parsed = new URL(urlValue);
+      const isYoutubeHost = /(^|\.)youtube\.com$/i.test(parsed.hostname);
+      return isYoutubeHost && parsed.pathname === "/watch" && !!parsed.searchParams.get("v");
+    } catch (error) {
       return false;
+    }
+  }
+
+  function getVideoId(urlValue = window.location.href) {
+    try {
+      return new URL(urlValue).searchParams.get("v") || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function formatDuration(seconds) {
+    const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const remainingSeconds = safeSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, "0")}:${String(
+        remainingSeconds
+      ).padStart(2, "0")}`;
+    }
+
+    return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+  }
+
+  function parseIsoDuration(value) {
+    const match = String(value || "").match(
+      /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i
+    );
+
+    if (!match) {
+      return "";
+    }
+
+    const hours = Number.parseInt(match[1] || "0", 10);
+    const minutes = Number.parseInt(match[2] || "0", 10);
+    const seconds = Number.parseInt(match[3] || "0", 10);
+
+    return formatDuration(hours * 3600 + minutes * 60 + seconds);
+  }
+
+  function getTextFromSelectors(selectors) {
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      const text = normalizeText(
+        element?.textContent || element?.innerText || element?.getAttribute?.("content")
+      );
+
+      if (text) {
+        return text;
+      }
+    }
+
+    return "";
+  }
+
+  function getMetaContent(selector) {
+    return normalizeText(document.querySelector(selector)?.getAttribute("content"));
+  }
+
+  function getVideoDuration() {
+    const player = document.querySelector("video");
+
+    if (player && Number.isFinite(player.duration) && player.duration > 0) {
+      return formatDuration(player.duration);
+    }
+
+    const metaDuration = parseIsoDuration(getMetaContent('meta[itemprop="duration"]'));
+    if (metaDuration) {
+      return metaDuration;
+    }
+
+    return getTextFromSelectors([".ytp-time-duration"]);
+  }
+
+  function getThumbnail(videoId) {
+    const ogImage = getMetaContent('meta[property="og:image"]');
+
+    if (ogImage) {
+      return ogImage;
+    }
+
+    return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "";
+  }
+
+  function collectVideoData() {
+    if (!isWatchPage()) {
+      return null;
+    }
+
+    const videoId = getVideoId();
+    const title =
+      getTextFromSelectors([
+        "ytd-watch-metadata h1 yt-formatted-string",
+        "h1.ytd-watch-metadata",
+        "h1.title",
+        "h1"
+      ]) ||
+      getMetaContent('meta[property="og:title"]') ||
+      normalizeText(document.title.replace(/\s*-\s*YouTube$/i, ""), "Untitled video");
+
+    const channelName =
+      getTextFromSelectors([
+        "#owner #channel-name a",
+        "ytd-watch-metadata #channel-name a",
+        "ytd-video-owner-renderer #channel-name a",
+        "ytd-channel-name a"
+      ]) ||
+      getMetaContent('meta[name="author"]') ||
+      "Unknown channel";
+
+    const duration = getVideoDuration() || "Unknown duration";
+    const url = window.location.href;
+
+    return {
+      videoId,
+      title,
+      channelName,
+      thumbnail: getThumbnail(videoId),
+      duration,
+      url
+    };
+  }
+
+  function getVideoFingerprint(video) {
+    return JSON.stringify([
+      video.videoId,
+      video.title,
+      video.channelName,
+      video.thumbnail,
+      video.duration,
+      video.url
+    ]);
+  }
+
+  function ensureMountNode() {
+    if (mountNode) {
+      return mountNode;
+    }
+
+    host = document.getElementById(ROOT_ID) || document.createElement("div");
+    host.id = ROOT_ID;
+    host.style.position = "fixed";
+    host.style.top = "18px";
+    host.style.right = "18px";
+    host.style.zIndex = "2147483647";
+    host.style.width = "min(360px, calc(100vw - 24px))";
+    host.style.pointerEvents = "auto";
+
+    if (!host.parentNode) {
+      document.documentElement.appendChild(host);
+    }
+
+    shadow = host.shadowRoot || host.attachShadow({ mode: "open" });
+
+    if (!shadow.getElementById("wavedrop-styles")) {
+      const styleLink = document.createElement("link");
+      styleLink.id = "wavedrop-styles";
+      styleLink.rel = "stylesheet";
+      styleLink.href = chrome.runtime.getURL("styles.css");
+      shadow.appendChild(styleLink);
+    }
+
+    mountNode = shadow.getElementById("wavedrop-content");
+
+    if (!mountNode) {
+      mountNode = document.createElement("div");
+      mountNode.id = "wavedrop-content";
+      shadow.appendChild(mountNode);
+      shadow.addEventListener("click", handleShadowClick);
+    }
+
+    return mountNode;
+  }
+
+  function destroyMountNode() {
+    clearTimeout(feedbackTimer);
+    mountNode = null;
+    shadow = null;
+
+    if (host) {
+      host.remove();
+      host = null;
+    }
+  }
+
+  function setFeedback(message, tone = "info") {
+    state.feedback = message;
+    state.feedbackTone = tone;
+    render();
+
+    clearTimeout(feedbackTimer);
+    feedbackTimer = window.setTimeout(() => {
+      state.feedback = "";
+      state.feedbackTone = "info";
+      render();
+    }, 2200);
+  }
+
+  async function copyToClipboard(text, successMessage) {
+    await navigator.clipboard.writeText(text);
+    setFeedback(successMessage, "success");
+  }
+
+  async function copySharePayload(video) {
+    await copyToClipboard(
+      `${video.title}\n${video.channelName} • ${video.duration}\n${video.url}`,
+      "Share-ready text copied"
+    );
+  }
+
+  async function shareVideo(video) {
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: video.title,
+          text: `${video.channelName} • ${video.duration}`,
+          url: video.url
+        });
+        setFeedback("Share sheet opened", "success");
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          return;
+        }
+      }
+    }
+
+    await copySharePayload(video);
+  }
+
+  async function syncSavedState() {
+    if (!state.video) {
+      state.isSaved = false;
+      return;
     }
 
     try {
-      const data = buildSnapshot();
-      sendResponse({ ok: true, data });
-    } catch (error) {
-      sendResponse({
-        ok: false,
-        error: error && error.message ? error.message : "page_analysis_failed"
+      const response = await chrome.runtime.sendMessage({
+        type: "WAVEDROP_GET_STATE"
       });
+      const library = response?.data?.library || [];
+
+      state.isSaved = library.some(
+        (entry) =>
+          (state.video.videoId && entry.videoId === state.video.videoId) ||
+          entry.url === state.video.url
+      );
+      render();
+    } catch (error) {
+      state.isSaved = false;
+      render();
     }
+  }
+
+  async function persistActiveVideo() {
+    if (!state.video) {
+      return;
+    }
+
+    try {
+      await chrome.runtime.sendMessage({
+        type: "WAVEDROP_SET_ACTIVE_VIDEO",
+        video: state.video
+      });
+    } catch (error) {
+      // Ignore transient storage sync failures so the overlay remains instant.
+    }
+  }
+
+  async function handleAction(action) {
+    if (!state.video || state.pendingAction) {
+      return;
+    }
+
+    state.pendingAction = action;
+    render();
+
+    try {
+      switch (action) {
+        case "copy":
+          await copyToClipboard(state.video.url, "Video link copied");
+          break;
+
+        case "external": {
+          const response = await chrome.runtime.sendMessage({
+            type: "WAVEDROP_OPEN_EXTERNAL_TOOL",
+            video: state.video
+          });
+
+          if (!response?.ok) {
+            throw new Error(response?.error || "external_tool_failed");
+          }
+
+          setFeedback("Handoff tab opened", "success");
+          break;
+        }
+
+        case "save": {
+          const response = await chrome.runtime.sendMessage({
+            type: "WAVEDROP_SAVE_VIDEO",
+            video: state.video
+          });
+
+          if (!response?.ok || !response.data) {
+            throw new Error(response?.error || "save_failed");
+          }
+
+          state.isSaved = true;
+          setFeedback(
+            response.data.alreadySaved ? "Already in library" : "Saved to library",
+            "success"
+          );
+          break;
+        }
+
+        case "share":
+          await shareVideo(state.video);
+          break;
+
+        default:
+          break;
+      }
+    } catch (error) {
+      setFeedback("Action unavailable right now", "error");
+    } finally {
+      state.pendingAction = "";
+      render();
+    }
+  }
+
+  function handleShadowClick(event) {
+    const actionButton = event.target.closest("button[data-action]");
+
+    if (!actionButton) {
+      return;
+    }
+
+    handleAction(actionButton.dataset.action);
+  }
+
+  function render() {
+    if (!state.video || !isWatchPage()) {
+      destroyMountNode();
+      return;
+    }
+
+    const root = ensureMountNode();
+    const actionIsPending = (action) => state.pendingAction === action;
+
+    root.innerHTML = `
+      <div class="wd-overlay-shell">
+        <div class="wd-glow wd-glow-one"></div>
+        <div class="wd-glow wd-glow-two"></div>
+        <section class="wd-overlay-panel wd-glass-card wd-animate-in">
+          <div class="wd-panel-top">
+            <div>
+              <p class="wd-kicker">WaveDrop</p>
+              <h2 class="wd-panel-title">YouTube companion layer</h2>
+            </div>
+            <span class="wd-chip wd-chip-live">Watch page</span>
+          </div>
+
+          <article class="wd-current-video">
+            <img
+              class="wd-thumb"
+              src="${escapeHtml(state.video.thumbnail)}"
+              alt="${escapeHtml(state.video.title)} thumbnail"
+            />
+            <div class="wd-video-meta">
+              <p class="wd-video-title">${escapeHtml(state.video.title)}</p>
+              <p class="wd-video-subline">${escapeHtml(state.video.channelName)}</p>
+              <div class="wd-meta-row">
+                <span class="wd-chip">${escapeHtml(state.video.duration)}</span>
+                ${
+                  state.isSaved
+                    ? '<span class="wd-chip wd-chip-success">Saved</span>'
+                    : '<span class="wd-chip wd-chip-muted">Ready</span>'
+                }
+              </div>
+            </div>
+          </article>
+
+          <div class="wd-action-grid">
+            <button class="wd-action-button" data-action="copy">
+              ${actionIsPending("copy") ? "Copying..." : "Copy Video Link"}
+            </button>
+            <button class="wd-action-button wd-action-button-accent" data-action="external">
+              ${actionIsPending("external") ? "Opening..." : "Open in External Tool"}
+            </button>
+            <button class="wd-action-button" data-action="save">
+              ${
+                actionIsPending("save")
+                  ? "Saving..."
+                  : state.isSaved
+                    ? "Save to Library"
+                    : "Save to Library"
+              }
+            </button>
+            <button class="wd-action-button" data-action="share">
+              ${actionIsPending("share") ? "Sharing..." : "Share"}
+            </button>
+          </div>
+
+          <div class="wd-footer-note">
+            <p class="wd-note-copy">
+              ${
+                state.feedback
+                  ? `<span class="wd-notice wd-notice-${escapeHtml(
+                      state.feedbackTone
+                    )}">${escapeHtml(state.feedback)}</span>`
+                  : "Collect the link, hand it off, or pin it to your local library."
+              }
+            </p>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  async function refreshVideoState() {
+    if (!isWatchPage()) {
+      state.video = null;
+      state.videoFingerprint = "";
+      state.isSaved = false;
+      state.pendingAction = "";
+      destroyMountNode();
+      return;
+    }
+
+    const nextVideo = collectVideoData();
+    if (!nextVideo) {
+      return;
+    }
+
+    const nextFingerprint = getVideoFingerprint(nextVideo);
+    const metadataChanged = nextFingerprint !== state.videoFingerprint;
+
+    state.video = nextVideo;
+    state.videoFingerprint = nextFingerprint;
+    render();
+
+    if (metadataChanged) {
+      await persistActiveVideo();
+      await syncSavedState();
+
+      if (
+        nextVideo.duration === "Unknown duration" ||
+        nextVideo.channelName === "Unknown channel"
+      ) {
+        scheduleRefresh(900);
+      }
+    }
+  }
+
+  function scheduleRefresh(delay = 180) {
+    clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(() => {
+      refreshTimer = null;
+      refreshVideoState();
+    }, delay);
+  }
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type !== "WAVEDROP_GET_VIDEO_CONTEXT") {
+      return false;
+    }
+
+    sendResponse({
+      ok: true,
+      data: {
+        video: state.video,
+        isSaved: state.isSaved,
+        pageSupported: isWatchPage()
+      }
+    });
 
     return true;
   });
+
+  const observer = new MutationObserver(() => {
+    scheduleRefresh(220);
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true
+  });
+
+  window.addEventListener("yt-navigate-finish", () => scheduleRefresh(260));
+  window.addEventListener("popstate", () => scheduleRefresh(260));
+  window.addEventListener("hashchange", () => scheduleRefresh(260));
+
+  scheduleRefresh(50);
 })();

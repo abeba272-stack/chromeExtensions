@@ -1,128 +1,195 @@
-const LINK_CHECK_LIMIT = 25;
-const FETCH_TIMEOUT_MS = 5000;
+const LIBRARY_KEY = "wavedropLibrary";
+const ACTIVE_VIDEO_KEY = "wavedropActiveVideo";
+const EXTERNAL_TOOL_BASE_URL = "https://www.google.com/search?q=";
 
-function withTimeout(promise, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+chrome.runtime.onInstalled.addListener(async () => {
+  const stored = await chrome.storage.local.get([LIBRARY_KEY]);
 
-    promise
-      .then((value) => {
-        clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-  });
+  if (!Array.isArray(stored[LIBRARY_KEY])) {
+    await chrome.storage.local.set({ [LIBRARY_KEY]: [] });
+  }
+});
+
+function normalizeText(value, fallback = "") {
+  const normalized = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized || fallback;
 }
 
-async function fetchWithFallback(url) {
+function extractVideoId(urlValue) {
   try {
-    return await withTimeout(
-      fetch(url, {
-        method: "HEAD",
-        redirect: "follow",
-        cache: "no-store",
-        credentials: "omit"
-      }),
-      FETCH_TIMEOUT_MS
-    );
-  } catch (headError) {
-    return withTimeout(
-      fetch(url, {
-        method: "GET",
-        redirect: "follow",
-        cache: "no-store",
-        credentials: "omit"
-      }),
-      FETCH_TIMEOUT_MS
-    );
+    const parsed = new URL(urlValue);
+    return parsed.searchParams.get("v") || "";
+  } catch (error) {
+    return "";
   }
 }
 
-async function validateInternalLinks(origin, links) {
-  const safeLinks = Array.from(new Set(links || []))
-    .slice(0, LINK_CHECK_LIMIT)
-    .filter((href) => {
-      try {
-        return new URL(href).origin === origin;
-      } catch (error) {
-        return false;
-      }
-    });
-
-  const results = await Promise.all(
-    safeLinks.map(async (url) => {
-      try {
-        const response = await fetchWithFallback(url);
-        const finalUrl = response.url || url;
-        const status = response.status || 0;
-
-        if (status === 0 || status === 401 || status === 403) {
-          return {
-            url,
-            finalUrl,
-            state: "unchecked",
-            httpStatus: status,
-            reason: "restricted_response"
-          };
-        }
-
-        if (status >= 400) {
-          return {
-            url,
-            finalUrl,
-            state: "broken",
-            httpStatus: status
-          };
-        }
-
-        return {
-          url,
-          finalUrl,
-          state: "valid",
-          httpStatus: status
-        };
-      } catch (error) {
-        return {
-          url,
-          state: "unchecked",
-          reason: error && error.message ? error.message : "fetch_failed"
-        };
-      }
-    })
-  );
-
-  const summary = results.reduce(
-    (accumulator, item) => {
-      accumulator[item.state] += 1;
-      return accumulator;
-    },
-    { valid: 0, broken: 0, unchecked: 0 }
-  );
+function normalizeVideo(video = {}) {
+  const url = normalizeText(video.url);
+  const videoId = normalizeText(video.videoId) || extractVideoId(url);
 
   return {
-    checkedCount: results.length,
-    limit: LINK_CHECK_LIMIT,
-    summary,
-    results
+    videoId,
+    title: normalizeText(video.title, "Untitled video"),
+    channelName: normalizeText(video.channelName, "Unknown channel"),
+    thumbnail: normalizeText(video.thumbnail),
+    duration: normalizeText(video.duration, "Unknown duration"),
+    url,
+    savedAt: normalizeText(video.savedAt)
   };
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== "BWD_VALIDATE_LINKS") {
-    return false;
+function buildExternalToolUrl(video) {
+  const query = [video.title, video.channelName, video.url].filter(Boolean).join(" ");
+  return `${EXTERNAL_TOOL_BASE_URL}${encodeURIComponent(query)}`;
+}
+
+async function getLibrary() {
+  const stored = await chrome.storage.local.get([LIBRARY_KEY]);
+  return Array.isArray(stored[LIBRARY_KEY]) ? stored[LIBRARY_KEY] : [];
+}
+
+async function getState() {
+  const stored = await chrome.storage.local.get([LIBRARY_KEY, ACTIVE_VIDEO_KEY]);
+
+  return {
+    library: Array.isArray(stored[LIBRARY_KEY]) ? stored[LIBRARY_KEY] : [],
+    activeVideo: stored[ACTIVE_VIDEO_KEY] || null
+  };
+}
+
+async function setActiveVideo(video) {
+  const normalized = normalizeVideo(video);
+
+  if (!normalized.url) {
+    return null;
   }
 
-  validateInternalLinks(message.origin, message.links)
-    .then((data) => sendResponse({ ok: true, data }))
-    .catch((error) =>
-      sendResponse({
-        ok: false,
-        error: error && error.message ? error.message : "link_validation_failed"
-      })
-    );
+  await chrome.storage.local.set({ [ACTIVE_VIDEO_KEY]: normalized });
+  return normalized;
+}
+
+async function saveVideo(video) {
+  const normalized = normalizeVideo(video);
+
+  if (!normalized.url) {
+    throw new Error("missing_video_url");
+  }
+
+  const library = await getLibrary();
+  const existingIndex = library.findIndex(
+    (entry) =>
+      (normalized.videoId && entry.videoId === normalized.videoId) ||
+      entry.url === normalized.url
+  );
+
+  const savedAt =
+    existingIndex >= 0 ? library[existingIndex].savedAt : new Date().toISOString();
+  const nextVideo = {
+    ...normalized,
+    savedAt
+  };
+
+  const nextLibrary =
+    existingIndex >= 0
+      ? [nextVideo, ...library.filter((_, index) => index !== existingIndex)]
+      : [nextVideo, ...library];
+
+  await chrome.storage.local.set({
+    [LIBRARY_KEY]: nextLibrary,
+    [ACTIVE_VIDEO_KEY]: nextVideo
+  });
+
+  return {
+    video: nextVideo,
+    library: nextLibrary,
+    alreadySaved: existingIndex >= 0
+  };
+}
+
+async function removeVideo(videoId, url) {
+  const library = await getLibrary();
+  const nextLibrary = library.filter((entry) => {
+    if (videoId && entry.videoId === videoId) {
+      return false;
+    }
+
+    if (url && entry.url === url) {
+      return false;
+    }
+
+    return true;
+  });
+
+  await chrome.storage.local.set({ [LIBRARY_KEY]: nextLibrary });
+  return nextLibrary;
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  (async () => {
+    switch (message?.type) {
+      case "WAVEDROP_GET_STATE": {
+        sendResponse({ ok: true, data: await getState() });
+        return;
+      }
+
+      case "WAVEDROP_SET_ACTIVE_VIDEO": {
+        sendResponse({
+          ok: true,
+          data: await setActiveVideo(message.video)
+        });
+        return;
+      }
+
+      case "WAVEDROP_SAVE_VIDEO": {
+        sendResponse({
+          ok: true,
+          data: await saveVideo(message.video)
+        });
+        return;
+      }
+
+      case "WAVEDROP_REMOVE_VIDEO": {
+        sendResponse({
+          ok: true,
+          data: {
+            library: await removeVideo(message.videoId, message.url)
+          }
+        });
+        return;
+      }
+
+      case "WAVEDROP_OPEN_EXTERNAL_TOOL": {
+        const video = normalizeVideo(message.video);
+
+        if (!video.url) {
+          throw new Error("missing_video_url");
+        }
+
+        await chrome.tabs.create({
+          url: buildExternalToolUrl(video)
+        });
+
+        sendResponse({ ok: true });
+        return;
+      }
+
+      default: {
+        sendResponse({
+          ok: false,
+          error: "unknown_message_type"
+        });
+      }
+    }
+  })().catch((error) => {
+    sendResponse({
+      ok: false,
+      error: error?.message || "unexpected_error"
+    });
+  });
 
   return true;
 });

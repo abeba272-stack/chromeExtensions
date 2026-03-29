@@ -1,15 +1,37 @@
 {
   "manifest_version": 3,
-  "name": "Broken Website Detector",
+  "name": "WaveDrop",
   "version": "1.0.0",
-  "description": "Analyze the current business website for UX, conversion, SEO, and technical issues that signal redesign or optimization opportunities.",
-  "permissions": ["activeTab", "scripting", "storage", "tabs"],
-  "host_permissions": ["<all_urls>"],
+  "description": "A premium YouTube companion for collecting, sharing, and organizing video references.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Broken Website Detector",
+    "default_title": "WaveDrop",
     "default_popup": "popup.html"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["styles.css"],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ]
+    }
+  ]
 }
