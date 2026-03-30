@@ -74,25 +74,27 @@
 
   function renderPrimaryActions(taskState) {
     const isBusy = [TASK_STATUS.PENDING, TASK_STATUS.PREPARING, TASK_STATUS.DOWNLOADING].includes(taskState.status);
-    const busyLabel = taskState.format === DOWNLOAD_FORMATS.MP3 ? "Preparing MP3" : "Preparing MP4";
+    const dlIcon = Icons.download ? Icons.download(14) : "";
+    const mp4Sub = isBusy && taskState.format === DOWNLOAD_FORMATS.MP4 ? renderStatusLabel(taskState) : "Video + audio";
+    const mp3Sub = isBusy && taskState.format === DOWNLOAD_FORMATS.MP3 ? renderStatusLabel(taskState) : "Audio only";
 
     return `
       <section class="wd-section-card wd-actions-card">
         <div class="wd-primary-actions">
           <button class="wd-primary-button wd-primary-button-video" data-action="download-mp4" ${isBusy ? "disabled" : ""}>
-            <span class="wd-button-label">Download MP4</span>
-            <span class="wd-button-sub">Video + audio</span>
+            <span class="wd-button-head">${dlIcon}<span class="wd-button-label">MP4</span></span>
+            <span class="wd-button-sub">${escapeHtml(mp4Sub)}</span>
           </button>
           <button class="wd-primary-button wd-primary-button-audio" data-action="download-mp3" ${isBusy ? "disabled" : ""}>
-            <span class="wd-button-label">Download MP3</span>
-            <span class="wd-button-sub">Audio only</span>
+            <span class="wd-button-head">${dlIcon}<span class="wd-button-label">MP3</span></span>
+            <span class="wd-button-sub">${escapeHtml(mp3Sub)}</span>
           </button>
         </div>
         <div class="wd-secondary-actions">
-          <button class="wd-secondary-button" data-action="external" ${isBusy ? "disabled" : ""}>Open External Tool</button>
-          <button class="wd-secondary-button" data-action="reset-task">${isBusy ? "Reset Task" : "Clear Status"}</button>
+          <button class="wd-secondary-button" data-action="external" ${isBusy ? "disabled" : ""}>External tool</button>
+          <button class="wd-secondary-button" data-action="reset-task">${isBusy ? "Reset" : "Clear status"}</button>
         </div>
-        <p class="wd-action-note">${escapeHtml(isBusy ? busyLabel : "WaveDrop uses a local bridge endpoint for real task-based MP3 and MP4 actions.")}</p>
+        <p class="wd-action-note">${escapeHtml(isBusy ? "Download in progress…" : "Bridge endpoint required for MP3 and MP4 downloads.")}</p>
       </section>
     `;
   }

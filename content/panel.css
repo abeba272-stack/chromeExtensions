@@ -1,3 +1,9 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   WaveDrop — content-script panel
+   Overrides theme.css with the same flat-dark music-player aesthetic
+   as the popup. All declarations override the glassy theme defaults.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :host {
   all: initial;
 }
@@ -6,49 +12,445 @@
   width: 100%;
 }
 
+/* ─── Shell surface ──────────────────────────────────────────────────────── */
+
 .wd-shell-surface {
   width: 100%;
   min-height: 608px;
+  background: #07090f;
+  border-radius: 0;
+  border: none;
+  border-top: 2px solid transparent;
+  border-image: linear-gradient(90deg, #8666ff 0%, #64f3ff 50%, #ff9f5a 100%) 1;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 28px 72px rgba(0, 0, 0, 0.72);
+  backdrop-filter: none;
+}
+
+.wd-shell-surface::before,
+.wd-shell-surface::after {
+  display: none;
 }
 
 .wd-shell-minimized {
   min-height: auto;
 }
 
-.wd-shell-body {
-  display: grid;
-  gap: 14px;
-  padding: 20px;
+/* ─── Window bar ─────────────────────────────────────────────────────────── */
+
+.wd-window-bar {
+  background: rgba(255, 255, 255, 0.012);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 56px;
+  background-image: none;
 }
 
+/* ─── Shell body — gap creates hairline separators between cards ─────────── */
+
+.wd-shell-body {
+  display: grid;
+  gap: 1px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ─── Section cards ──────────────────────────────────────────────────────── */
+
+.wd-section-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: #07090f;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+.wd-section-card::before,
+.wd-section-card::after {
+  display: none;
+}
+
+/* ─── Header wordmark ────────────────────────────────────────────────────── */
+
+.wd-header-wordmark {
+  font-family: var(--wd-font-brand);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #f0f2f9;
+  text-shadow: none;
+  background: none;
+  -webkit-background-clip: unset;
+}
+
+/* ─── Badges / pills ─────────────────────────────────────────────────────── */
+
+.wd-mini-pill,
+.wd-status-pill,
+.wd-progress-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 0;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(185, 198, 225, 0.55);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: none;
+}
+
+/* ─── Overline label ─────────────────────────────────────────────────────── */
+
+.wd-overline,
+.wd-ornament-title {
+  font-family: var(--wd-font-body);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(155, 172, 205, 0.4);
+}
+
+/* ─── Section / video titles ─────────────────────────────────────────────── */
+
+.wd-section-title {
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.wd-video-title {
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.wd-empty-title {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+/* ─── Video frame ────────────────────────────────────────────────────────── */
+
+.wd-video-frame {
+  border-radius: 0;
+  box-shadow: none;
+  min-height: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.wd-video-frame::after {
+  border-radius: 0;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Primary download buttons ───────────────────────────────────────────── */
+
+.wd-primary-button {
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-left-width: 2px;
+  background: rgba(255, 255, 255, 0.025);
+  min-height: 60px;
+  text-align: left;
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  color: #eaecf4;
+  transition:
+    background   150ms ease,
+    border-color 150ms ease,
+    transform    150ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow   150ms ease;
+}
+
+.wd-primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: none;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.wd-primary-button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 60ms;
+}
+
+.wd-primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.32;
+  transform: none;
+  box-shadow: none;
+}
+
+.wd-primary-button-video {
+  border-left-color: rgba(255, 159, 90, 0.55);
+  background: rgba(255, 159, 90, 0.03);
+  box-shadow: none;
+}
+
+.wd-primary-button-video:hover:not(:disabled) {
+  border-left-color: rgba(255, 159, 90, 1);
+  background: rgba(255, 159, 90, 0.07);
+  box-shadow:
+    inset 3px 0 14px rgba(255, 159, 90, 0.1),
+    0 6px 24px rgba(255, 159, 90, 0.13);
+}
+
+.wd-primary-button-audio {
+  border-left-color: rgba(100, 120, 255, 0.55);
+  background: rgba(100, 120, 255, 0.03);
+  box-shadow: none;
+}
+
+.wd-primary-button-audio:hover:not(:disabled) {
+  border-left-color: rgba(100, 120, 255, 1);
+  background: rgba(100, 120, 255, 0.07);
+  box-shadow:
+    inset 3px 0 14px rgba(100, 120, 255, 0.1),
+    0 6px 24px rgba(100, 120, 255, 0.13);
+}
+
+/* Icon + label on one flex row */
+.wd-button-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+
+.wd-button-head svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 150ms ease;
+}
+
+.wd-primary-button:hover:not(:disabled) .wd-button-head svg {
+  opacity: 0.9;
+}
+
+.wd-button-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #eaecf4;
+}
+
+.wd-button-sub {
+  font-size: 10px;
+  color: rgba(155, 172, 205, 0.48);
+  letter-spacing: 0.03em;
+}
+
+/* ─── Secondary buttons ──────────────────────────────────────────────────── */
+
+.wd-secondary-button,
+.wd-minimized-strip {
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
+  color: #eaecf4;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  min-height: 32px;
+  padding: 0 12px;
+  transition:
+    background   150ms ease,
+    border-color 150ms ease,
+    transform    150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wd-secondary-button:hover:not(:disabled),
+.wd-minimized-strip:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+  transform: translateY(-1px);
+  filter: none;
+  box-shadow: none;
+}
+
+.wd-secondary-button:active:not(:disabled),
+.wd-minimized-strip:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 60ms;
+}
+
+/* ─── Progress track — thin 2 px seek bar ───────────────────────────────── */
+
+.wd-progress-track {
+  height: 2px;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: visible;
+}
+
+.wd-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 0;
+  background: linear-gradient(90deg, #8666ff, #64f3ff);
+  box-shadow: 0 0 6px rgba(100, 243, 255, 0.55);
+  transition: width 280ms ease;
+}
+
+.wd-status-complete {
+  background: #7df4c0;
+  box-shadow: 0 0 6px rgba(125, 244, 192, 0.55);
+}
+
+.wd-status-failed {
+  background: #ff6490;
+  box-shadow: 0 0 6px rgba(255, 100, 144, 0.55);
+}
+
+.wd-status-pending,
+.wd-status-preparing,
+.wd-status-downloading {
+  animation: wdPanelPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes wdPanelPulse {
+  0%, 100% { opacity: 0.7; box-shadow: 0 0 4px rgba(100, 243, 255, 0.3); }
+  50%       { opacity: 1;   box-shadow: 0 0 10px rgba(100, 243, 255, 0.7); }
+}
+
+/* ─── Status copy ────────────────────────────────────────────────────────── */
+
+.wd-status-copy {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(155, 172, 205, 0.5);
+  min-height: auto;
+  margin: 0;
+}
+
+.wd-action-note {
+  font-size: 10px;
+  color: rgba(155, 172, 205, 0.32);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* ─── Window controls ────────────────────────────────────────────────────── */
+
+.wd-window-controls {
+  gap: 6px;
+}
+
+.wd-window-dot {
+  width: 10px;
+  height: 10px;
+}
+
+/* ─── Primary actions grid ───────────────────────────────────────────────── */
+
+.wd-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wd-secondary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* ─── Launcher orb ───────────────────────────────────────────────────────── */
+
 .wd-launcher-orb {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 0;
+  background: #07090f;
+  border: none;
+  border-top: 2px solid transparent;
+  border-image: linear-gradient(90deg, #8666ff 0%, #64f3ff 50%, #ff9f5a 100%) 1;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 8px 32px rgba(0, 0, 0, 0.5);
   display: grid;
   gap: 4px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-  background: rgba(18, 11, 30, 0.78);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
-  color: #fff;
+  text-align: left;
+  color: #eaecf4;
   cursor: pointer;
+  transition:
+    box-shadow 150ms ease,
+    transform  150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wd-launcher-orb:hover {
+  transform: translateY(-1px);
+  filter: none;
+  border-color: unset;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 12px 40px rgba(0, 0, 0, 0.55);
 }
 
 .wd-launcher-mark {
-  font: 700 18px/1 var(--wd-font-display);
-  background: linear-gradient(180deg, rgba(12, 12, 16, 0.92), rgba(12, 12, 16, 0.08));
-  -webkit-background-clip: text;
-  color: transparent;
+  font: 900 16px/1 var(--wd-font-brand);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #f0f2f9;
+  background: none;
+  -webkit-background-clip: unset;
   justify-self: start;
 }
 
 .wd-launcher-copy {
-  font: 600 12px/1.4 var(--wd-font-body);
-  color: var(--wd-text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(155, 172, 205, 0.5);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ─── Minimized strip ────────────────────────────────────────────────────── */
+
+.wd-minimized-strip {
+  width: calc(100% - 24px);
+  margin: 0 12px 12px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 10px 12px;
+}
+
+.wd-minimized-title {
+  font-family: var(--wd-font-brand);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #f0f2f9;
+}
+
+.wd-minimized-copy {
+  font-size: 11px;
+  color: rgba(155, 172, 205, 0.5);
+}
+
+/* ─── Atmosphere card ────────────────────────────────────────────────────── */
+
+.wd-nine-nine-nine {
+  background: linear-gradient(180deg, rgba(10, 10, 14, 0.7), rgba(10, 10, 14, 0.1));
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* ─── Drag handle ────────────────────────────────────────────────────────── */
 
 .wd-window-bar[data-drag-handle="true"] {
   cursor: grab;
@@ -60,19 +462,11 @@
   cursor: grabbing;
 }
 
-.wd-primary-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.wd-minimized-strip {
-  width: calc(100% - 24px);
-  margin: 0 12px 12px;
-}
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
 
 @media (max-width: 520px) {
-  .wd-primary-actions {
+  .wd-primary-actions,
+  .wd-secondary-actions {
     grid-template-columns: 1fr;
   }
 }
