@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "WaveDrop",
+  "version": "2.0.0",
+  "description": "A neon macOS-inspired YouTube companion with a floating panel, bridge-based media actions, and a premium control popup.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://music.youtube.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background/worker.js"
+  },
+  "action": {
+    "default_title": "WaveDrop",
+    "default_popup": "popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://music.youtube.com/*"
+      ],
+      "js": [
+        "shared/constants.js",
+        "shared/messages.js",
+        "shared/storage.js",
+        "shared/icons.js",
+        "content/panel.js",
+        "content/injector.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "shared/theme.css",
+        "content/panel.css",
+        "assets/juice-carton.svg"
+      ],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://music.youtube.com/*"
+      ]
+    }
+  ]
+}

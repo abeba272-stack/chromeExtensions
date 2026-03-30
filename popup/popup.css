@@ -1,0 +1,978 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   WaveDrop — popup UI
+   Music-player aesthetic · rectangular · 8 px grid · no fake OS chrome
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Shell ──────────────────────────────────────────────────────────────── */
+
+html,
+body {
+  width: 432px;
+  min-width: 432px;
+  min-height: 640px;
+  margin: 0;
+  overflow: hidden;
+  background: #07090f;
+  font-family: var(--wd-font-body);
+  color: #eaecf4;
+}
+
+body.wd-popup-page::before,
+body.wd-popup-page::after {
+  display: none;
+}
+
+.wd-popup-frame {
+  min-height: 640px;
+  padding: 0;
+}
+
+/*
+ * .wd-popup-surface
+ * The single visible container — fills the whole popup viewport.
+ * The 2 px rainbow top-edge is the only decorative flourish;
+ * everything else is flat geometry.
+ */
+.wd-popup-surface {
+  min-height: 640px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: #07090f;
+  border-top: 2px solid transparent;
+  border-image: linear-gradient(90deg, #8666ff 0%, #64f3ff 50%, #ff9f5a 100%) 1;
+  overflow: hidden;
+  animation: wdPopupEnter 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.wd-popup-surface::before,
+.wd-popup-surface::after {
+  display: none;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+
+/*
+ * Three equal-basis columns guarantee perfect centering:
+ *
+ *   [spacer 56px] — [center flex-grow] — [actions 56px]
+ *
+ * Because .wd-popup-header-spacer and .wd-popup-header-actions share the
+ * same fixed flex-basis (56 px), the center column is always the true
+ * horizontal midpoint of the header, regardless of badge or icon width.
+ */
+.wd-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.012);
+  flex-shrink: 0;
+}
+
+.wd-popup-header-spacer {
+  flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.wd-popup-header-center {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.wd-popup-header-actions {
+  flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative; /* dropdown anchor */
+}
+
+/* ─── Title & kicker ─────────────────────────────────────────────────────── */
+
+.wd-popup-title {
+  margin: 0;
+  font-family: var(--wd-font-brand);
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  font-weight: 900;
+  color: #f0f2f9;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.wd-popup-kicker,
+.wd-popup-label {
+  font-family: var(--wd-font-body);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(155, 170, 200, 0.42);
+}
+
+/* ─── Context badge ──────────────────────────────────────────────────────── */
+
+.wd-popup-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(185, 198, 225, 0.55);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Status badge pulsing while a task is active */
+.wd-popup-badge[data-status="pending"],
+.wd-popup-badge[data-status="preparing"],
+.wd-popup-badge[data-status="downloading"] {
+  border-color: rgba(100, 243, 255, 0.22);
+  color: rgba(180, 235, 248, 0.75);
+  animation: wdBadgePulse 2s ease-in-out infinite;
+}
+
+@keyframes wdBadgePulse {
+  0%, 100% { opacity: 0.75; }
+  50%      { opacity: 1; }
+}
+
+/* ─── Control-centre button (three-dot trigger) ──────────────────────────── */
+
+.wd-popup-control-btn {
+  appearance: none;
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(155, 172, 205, 0.36);
+  cursor: pointer;
+  transition:
+    background    160ms ease,
+    color         160ms ease,
+    border-color  160ms ease,
+    box-shadow    160ms ease;
+}
+
+.wd-popup-control-btn:hover {
+  background: rgba(134, 102, 255, 0.07);
+  border-color: rgba(134, 102, 255, 0.16);
+  color: rgba(185, 200, 235, 0.82);
+}
+
+.wd-popup-control-btn:focus-visible {
+  outline: 2px solid rgba(134, 102, 255, 0.6);
+  outline-offset: 2px;
+}
+
+/*
+ * Active state — menu is open.
+ * [aria-expanded="true"] is set by initControlMenu() in popup.js.
+ */
+.wd-popup-control-btn[aria-expanded="true"] {
+  background: rgba(134, 102, 255, 0.13);
+  border-color: rgba(134, 102, 255, 0.34);
+  color: #b39dff;
+  box-shadow:
+    0 0 16px rgba(134, 102, 255, 0.22),
+    inset 0 0 10px rgba(134, 102, 255, 0.09);
+}
+
+/* Glow-dot below the dots when active — signals "live" panel */
+.wd-popup-control-btn[aria-expanded="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #8666ff;
+  box-shadow: 0 0 6px #8666ff, 0 0 12px rgba(134, 102, 255, 0.55);
+  animation: wdDotPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes wdDotPulse {
+  0%, 100% { opacity: 0.7; box-shadow: 0 0 4px #8666ff; }
+  50%      { opacity: 1;   box-shadow: 0 0 9px #8666ff, 0 0 18px rgba(134, 102, 255, 0.5); }
+}
+
+/* ─── Dropdown panel ─────────────────────────────────────────────────────── */
+
+.wd-popup-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -4px;
+  width: 196px;
+  background: #0c0e1a;
+  border: 1px solid rgba(134, 102, 255, 0.16);
+  padding: 6px 6px 4px;
+  z-index: 200;
+  overflow: hidden;
+
+  /* Depth shadow + violet aura */
+  box-shadow:
+    0 2px 6px  rgba(0, 0, 0, 0.45),
+    0 14px 40px rgba(0, 0, 0, 0.72),
+    0 0 0 1px  rgba(0, 0, 0, 0.55),
+    0 0 32px   rgba(134, 102, 255, 0.13);
+
+  /* Closed — fast linear fade-out */
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+  transform-origin: top right;
+  pointer-events: none;
+  transition:
+    opacity   130ms linear,
+    transform 130ms ease-in;
+}
+
+/*
+ * Rainbow top-edge line — echoes the main surface's border-image accent.
+ * Done via ::before so we can keep the side borders a single colour.
+ */
+.wd-popup-menu::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, #8666ff 0%, #64f3ff 55%, #ff9f5a 100%);
+  z-index: 2;
+}
+
+/* Soft violet wash under the rainbow line */
+.wd-popup-menu::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: linear-gradient(180deg, rgba(134, 102, 255, 0.055) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Open — spring easing for entry */
+.wd-popup-menu.is-open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition:
+    opacity   220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── Menu items ─────────────────────────────────────────────────────────── */
+
+.wd-popup-menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-left: 1.5px solid transparent;
+  background: none;
+  color: rgba(185, 200, 232, 0.56);
+  font-family: var(--wd-font-body);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  text-align: left;
+  cursor: pointer;
+  z-index: 1;
+  transition:
+    background    140ms ease,
+    color         140ms ease,
+    border-color  140ms ease;
+}
+
+.wd-popup-menu-item svg {
+  flex-shrink: 0;
+  opacity: 0.52;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+/* Default hover — violet left-rail, matching the download button language */
+.wd-popup-menu-item:hover {
+  color: rgba(215, 222, 248, 0.92);
+  background: rgba(134, 102, 255, 0.07);
+  border-left-color: rgba(134, 102, 255, 0.6);
+}
+
+.wd-popup-menu-item:hover svg {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+/* Settings — pure violet accent */
+.wd-popup-menu-item[data-menu-action="settings"]:hover {
+  border-left-color: rgba(134, 102, 255, 0.75);
+  background: rgba(134, 102, 255, 0.08);
+}
+
+/* Clear — warm pink/red accent so destructive intent reads clearly */
+.wd-popup-menu-item[data-menu-action="clear"]:hover {
+  border-left-color: rgba(255, 100, 144, 0.6);
+  background: rgba(255, 100, 144, 0.05);
+  color: rgba(255, 208, 220, 0.88);
+}
+
+.wd-popup-menu-item[data-menu-action="clear"]:hover svg {
+  color: rgba(255, 140, 170, 0.9);
+}
+
+/* Slide-in from the right, staggered per item */
+.wd-popup-menu.is-open .wd-popup-menu-item {
+  animation: wdMenuItemIn 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.wd-popup-menu.is-open .wd-popup-menu-item:nth-child(1) { animation-delay: 40ms; }
+.wd-popup-menu.is-open .wd-popup-menu-item:nth-child(2) { animation-delay: 75ms; }
+
+@keyframes wdMenuItemIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ─── Separator ──────────────────────────────────────────────────────────── */
+
+.wd-popup-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(134, 102, 255, 0.1);
+}
+
+/* ─── Version meta ───────────────────────────────────────────────────────── */
+
+.wd-popup-menu-meta {
+  margin: 0;
+  padding: 5px 10px 7px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(134, 102, 255, 0.28);
+}
+
+/* ─── Scroll container ───────────────────────────────────────────────────── */
+
+.wd-popup-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.07) transparent;
+}
+
+.wd-popup-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.wd-popup-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* ─── Section layout ─────────────────────────────────────────────────────── */
+
+/*
+ * Sections sit flush against each other with a hairline gap.
+ * Setting `gap: 1px` on the grid and giving the grid a separator colour
+ * creates dividers without adding any margin or padding to sections.
+ */
+.wd-popup-layout {
+  display: grid;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.wd-popup-section {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  background: #07090f;
+}
+
+.wd-popup-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Sub-heading inside a section — adds a small top push above a dividing label */
+.wd-popup-section-subhead {
+  margin-top: 4px;
+}
+
+/* Section overline — small ALL-CAPS label, like a track list category */
+.wd-popup-section-title {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: rgba(155, 172, 205, 0.4);
+}
+
+.wd-popup-section-copy {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(155, 172, 205, 0.5);
+}
+
+/* ─── "Now playing" video block ──────────────────────────────────────────── */
+
+.wd-popup-video-block {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.wd-popup-video-frame {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.wd-popup-video-frame-empty {
+  display: grid;
+  place-items: center;
+  color: rgba(155, 172, 205, 0.3);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.wd-popup-video-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: wdThumbIn 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes wdThumbIn {
+  from { opacity: 0; transform: scale(1.06); }
+  to   { opacity: 1; transform: none; }
+}
+
+.wd-popup-video-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.wd-popup-video-title {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+  color: #eaecf4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.wd-popup-video-meta,
+.wd-popup-note,
+.wd-popup-settings-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(155, 172, 205, 0.5);
+}
+
+.wd-popup-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.wd-popup-meta-dot {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Download buttons ───────────────────────────────────────────────────── */
+
+.wd-popup-download-grid,
+.wd-popup-utility-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Base button */
+.wd-popup-button {
+  appearance: none;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #eaecf4;
+  cursor: pointer;
+  font-family: var(--wd-font-body);
+  transition:
+    background   150ms ease,
+    border-color 150ms ease,
+    transform    150ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow   150ms ease;
+}
+
+.wd-popup-button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+  transform: translateY(-1px);
+}
+
+/* Snap back on press — instant settle */
+.wd-popup-button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 60ms;
+}
+
+.wd-popup-button:focus-visible {
+  outline: 2px solid rgba(134, 102, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.wd-popup-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.32;
+}
+
+/* Active download — muted glow so the user can see which format is running */
+.wd-popup-button-download.is-busy {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.wd-popup-button-download-mp4.is-busy {
+  border-left-color: rgba(255, 159, 90, 0.4);
+  background: rgba(255, 159, 90, 0.04);
+}
+
+.wd-popup-button-download-mp3.is-busy {
+  border-left-color: rgba(100, 120, 255, 0.4);
+  background: rgba(100, 120, 255, 0.04);
+}
+
+/*
+ * Download buttons: left coloured rail acts as the visual "play type"
+ * indicator — warm amber = video, blue = audio.
+ */
+.wd-popup-button-download {
+  min-height: 56px;
+  padding: 12px 14px;
+  text-align: left;
+  display: grid;
+  gap: 5px;
+  border-left-width: 2px;
+}
+
+.wd-popup-button-download-mp4 {
+  border-left-color: rgba(255, 159, 90, 0.55);
+  background: rgba(255, 159, 90, 0.03);
+}
+
+.wd-popup-button-download-mp4:hover:not(:disabled) {
+  border-left-color: rgba(255, 159, 90, 1);
+  background: rgba(255, 159, 90, 0.07);
+  box-shadow:
+    inset 3px 0 14px rgba(255, 159, 90, 0.1),
+    0 6px 24px rgba(255, 159, 90, 0.13);
+}
+
+.wd-popup-button-download-mp3 {
+  border-left-color: rgba(100, 120, 255, 0.55);
+  background: rgba(100, 120, 255, 0.03);
+}
+
+.wd-popup-button-download-mp3:hover:not(:disabled) {
+  border-left-color: rgba(100, 120, 255, 1);
+  background: rgba(100, 120, 255, 0.07);
+  box-shadow:
+    inset 3px 0 14px rgba(100, 120, 255, 0.1),
+    0 6px 24px rgba(100, 120, 255, 0.13);
+}
+
+/*
+ * Download-trigger kickoff flash — added by JS for one animation cycle the
+ * moment the user clicks, before the button re-renders as disabled.
+ * Each format uses its own palette to stay on-brand.
+ */
+.wd-popup-button-download-mp4.is-starting {
+  animation: wdKickoffAmber 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.wd-popup-button-download-mp3.is-starting {
+  animation: wdKickoffBlue 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes wdKickoffAmber {
+  0%   { box-shadow: none; }
+  28%  { box-shadow: 0 0 0 3px rgba(255, 159, 90, 0.32), 0 0 32px rgba(255, 159, 90, 0.2); }
+  100% { box-shadow: none; }
+}
+
+@keyframes wdKickoffBlue {
+  0%   { box-shadow: none; }
+  28%  { box-shadow: 0 0 0 3px rgba(100, 120, 255, 0.32), 0 0 32px rgba(100, 120, 255, 0.2); }
+  100% { box-shadow: none; }
+}
+
+/*
+ * Icon + format label on a single flex row inside the download button.
+ * The icon sits to the left of the title, aligned to cap-height.
+ */
+.wd-popup-button-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+
+.wd-popup-button-head svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 150ms ease;
+}
+
+.wd-popup-button:hover:not(:disabled) .wd-popup-button-head svg {
+  opacity: 0.9;
+}
+
+.wd-popup-button-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.wd-popup-button-copy {
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(155, 172, 205, 0.48);
+  letter-spacing: 0.03em;
+}
+
+/* Small secondary actions */
+.wd-popup-button-secondary {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* ─── Notice banners ─────────────────────────────────────────────────────── */
+
+/*
+ * Left-rail coloured banners — consistent with the download button language.
+ * Each banner slides in from the top so it doesn't feel like a sudden pop.
+ */
+.wd-popup-banner {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-left-width: 2px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 12px;
+  line-height: 1.45;
+  animation: wdBannerIn 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes wdBannerIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.wd-popup-banner-success {
+  border-left-color: rgba(125, 244, 192, 0.6);
+  background: rgba(125, 244, 192, 0.035);
+  color: #cdf5e2;
+}
+
+.wd-popup-banner-error {
+  border-left-color: rgba(255, 100, 144, 0.6);
+  background: rgba(255, 100, 144, 0.035);
+  color: #ffd0dd;
+}
+
+/* ─── Progress / seek bar ────────────────────────────────────────────────── */
+
+.wd-popup-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.wd-popup-progress-value {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(185, 198, 225, 0.65);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Seek-bar geometry: a 2 px line with a glow dot at the head */
+.wd-popup-progress-track {
+  width: 100%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+  overflow: visible;
+}
+
+.wd-popup-progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #8666ff, #64f3ff);
+  box-shadow: 0 0 6px rgba(100, 243, 255, 0.55);
+  transition: width 280ms ease;
+  position: relative;
+}
+
+/* Glow-dot at the playhead */
+.wd-popup-progress-fill::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64f3ff;
+  box-shadow: 0 0 6px #64f3ff;
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+
+/* data-active is set by JS when progress > 0 */
+.wd-popup-progress-fill[data-active]::after {
+  opacity: 1;
+}
+
+.wd-popup-progress-fill[data-state="complete"] {
+  background: #7df4c0;
+  box-shadow: 0 0 6px rgba(125, 244, 192, 0.55);
+}
+
+.wd-popup-progress-fill[data-state="complete"]::after {
+  background: #7df4c0;
+  box-shadow: 0 0 6px #7df4c0;
+}
+
+.wd-popup-progress-fill[data-state="failed"] {
+  background: #ff6490;
+  box-shadow: 0 0 6px rgba(255, 100, 144, 0.55);
+}
+
+.wd-popup-progress-fill[data-state="failed"]::after {
+  background: #ff6490;
+  box-shadow: 0 0 6px #ff6490;
+}
+
+/* Breathe animation while a task is active */
+.wd-popup-progress-fill[data-state="pending"],
+.wd-popup-progress-fill[data-state="preparing"],
+.wd-popup-progress-fill[data-state="downloading"] {
+  animation: wdProgressPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes wdProgressPulse {
+  0%, 100% { opacity: 0.7; box-shadow: 0 0 4px rgba(100, 243, 255, 0.3); }
+  50%       { opacity: 1;   box-shadow: 0 0 10px rgba(100, 243, 255, 0.7); }
+}
+
+.wd-popup-status-copy {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(155, 172, 205, 0.5);
+}
+
+/* ─── Settings inputs ────────────────────────────────────────────────────── */
+
+.wd-popup-settings-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.wd-popup-field {
+  display: grid;
+  gap: 4px;
+}
+
+.wd-popup-field-label {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(155, 172, 205, 0.4);
+}
+
+.wd-popup-input {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.3);
+  color: #eaecf4;
+  /* monospace reinforces the "technical endpoint" context */
+  font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.wd-popup-input:focus {
+  border-color: rgba(100, 243, 255, 0.3);
+  box-shadow: 0 0 0 2px rgba(100, 243, 255, 0.06);
+}
+
+/* Triggered by bridge_not_configured error handler in popup.js */
+.wd-popup-input.is-highlighted {
+  border-color: rgba(255, 100, 144, 0.4);
+  box-shadow: 0 0 0 2px rgba(255, 100, 144, 0.08);
+  animation: wdInputShake 300ms ease;
+}
+
+@keyframes wdInputShake {
+  0%, 100% { transform: translateX(0); }
+  25%       { transform: translateX(-3px); }
+  75%       { transform: translateX(3px); }
+}
+
+/* ─── Skeleton loader ────────────────────────────────────────────────────── */
+
+.wd-popup-empty-copy {
+  max-width: 28ch;
+}
+
+.wd-popup-skeleton {
+  display: grid;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.wd-popup-skeleton-card {
+  height: 200px;
+  background: #07090f;
+  overflow: hidden;
+  position: relative;
+}
+
+.wd-popup-skeleton-card:nth-child(2) {
+  height: 240px;
+}
+
+.wd-popup-skeleton-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: wdShimmer 1.3s linear infinite;
+}
+
+@keyframes wdShimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* ─── Section stagger (first content render only) ───────────────────────── */
+/*
+ * JS adds .wd-layout-entering to the layout wrapper once, on the first
+ * non-loading render.  Subsequent re-renders (progress ticks, etc.) create a
+ * fresh wrapper WITHOUT this class so sections never re-animate mid-download.
+ */
+.wd-layout-entering .wd-popup-section {
+  animation: wdSectionIn 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.wd-layout-entering .wd-popup-section:nth-child(1) { animation-delay: 60ms; }
+.wd-layout-entering .wd-popup-section:nth-child(2) { animation-delay: 130ms; }
+
+@keyframes wdSectionIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ─── Entrance animation ─────────────────────────────────────────────────── */
+/*
+ * More dramatic than a 3 px nudge — scale from 0.98 so the whole popup
+ * "breathes in" as it opens. Spring easing matches the menu panel.
+ */
+@keyframes wdPopupEnter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 460px) {
+  html,
+  body {
+    width: 408px;
+    min-width: 408px;
+  }
+
+  .wd-popup-header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .wd-popup-scroll {
+    padding: 0;
+  }
+
+  .wd-popup-video-block,
+  .wd-popup-download-grid,
+  .wd-popup-utility-row {
+    grid-template-columns: 1fr;
+  }
+}
