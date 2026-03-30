@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "WaveDrop Bridge (yt-dlp, port 4123)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["/Users/abeba272rr/Desktop/AbebaIT/Projekte/Chrome Extentions/Youtube Downloader/bridge/server.js"],
+      "port": 4123
+    },
+    {
+      "name": "ki-server (Express / Ollama bridge)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["/Users/abeba272rr/Desktop/AbebaIT/Projekte/ki-server/server.js"],
+      "port": 3000
+    },
+    {
+      "name": "Parry – test-website-main (static)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "/Users/abeba272rr/Desktop/AbebaIT/Projekte/Parry/test-website-main", "--listen", "5173"],
+      "port": 5173
+    },
+    {
+      "name": "Parry – parrylicious-demo (static)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "/Users/abeba272rr/Desktop/AbebaIT/Projekte/Parry/parrylicious-demo", "--listen", "5174"],
+      "port": 5174
+    }
+  ]
+}

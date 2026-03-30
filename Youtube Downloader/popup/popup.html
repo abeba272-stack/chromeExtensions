@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WaveDrop</title>
+    <link rel="stylesheet" href="../shared/theme.css" />
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body class="wd-popup-page">
+    <main class="wd-popup-frame">
+      <section class="wd-popup-surface">
+        <header class="wd-popup-header">
+          <div class="wd-popup-header-spacer">
+            <span id="wd-popup-context-badge" class="wd-popup-badge">Checking page</span>
+          </div>
+          <div class="wd-popup-header-center">
+            <h1 class="wd-popup-title">JUICE WRLD</h1>
+            <span class="wd-popup-kicker">Download Console</span>
+          </div>
+          <div class="wd-popup-header-actions">
+            <button
+              class="wd-popup-control-btn"
+              id="wd-popup-control-menu"
+              aria-label="Control center"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <!--
+                Three dots — slightly larger (r="1.6") for better presence
+                at high-DPI. The middle dot is shifted up 1 px so the
+                optical centre sits at the icon's visual midpoint.
+              -->
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <circle cx="8" cy="2.8" r="1.6"/>
+                <circle cx="8" cy="8"   r="1.6"/>
+                <circle cx="8" cy="13.2" r="1.6"/>
+              </svg>
+            </button>
+
+            <!-- ── Control-centre dropdown ──────────────────────────────── -->
+            <nav class="wd-popup-menu" id="wd-popup-menu" aria-label="Control centre menu">
+
+              <button class="wd-popup-menu-item" data-menu-action="settings">
+                <!-- Settings / gear -->
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.6"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42
+                           M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                </svg>
+                <span>Settings</span>
+              </button>
+
+              <button class="wd-popup-menu-item" data-menu-action="clear">
+                <!-- Clear / eraser-style X -->
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6"  x2="6"  y2="18"/>
+                  <line x1="6"  y1="6"  x2="18" y2="18"/>
+                </svg>
+                <span>Clear status</span>
+              </button>
+
+              <div class="wd-popup-menu-sep" role="separator"></div>
+
+              <!-- Version pill — styled as a muted brand label -->
+              <p class="wd-popup-menu-meta">WaveDrop &nbsp;·&nbsp; v2.0.0</p>
+
+            </nav>
+          </div>
+        </header>
+        <div id="wd-popup-root" class="wd-popup-scroll" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script src="../shared/constants.js"></script>
+    <script src="../shared/messages.js"></script>
+    <script src="../shared/storage.js"></script>
+    <script src="../shared/icons.js"></script>
+    <script src="../background/providers.js"></script>
+    <script src="./popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,78 @@
+:host {
+  all: initial;
+}
+
+#wd-panel-mount {
+  width: 100%;
+}
+
+.wd-shell-surface {
+  width: 100%;
+  min-height: 608px;
+}
+
+.wd-shell-minimized {
+  min-height: auto;
+}
+
+.wd-shell-body {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.wd-launcher-orb {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: rgba(18, 11, 30, 0.78);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+  color: #fff;
+  cursor: pointer;
+}
+
+.wd-launcher-mark {
+  font: 700 18px/1 var(--wd-font-display);
+  background: linear-gradient(180deg, rgba(12, 12, 16, 0.92), rgba(12, 12, 16, 0.08));
+  -webkit-background-clip: text;
+  color: transparent;
+  justify-self: start;
+}
+
+.wd-launcher-copy {
+  font: 600 12px/1.4 var(--wd-font-body);
+  color: var(--wd-text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wd-window-bar[data-drag-handle="true"] {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+:host([data-dragging="true"]) .wd-window-bar[data-drag-handle="true"] {
+  cursor: grabbing;
+}
+
+.wd-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wd-minimized-strip {
+  width: calc(100% - 24px);
+  margin: 0 12px 12px;
+}
+
+@media (max-width: 520px) {
+  .wd-primary-actions {
+    grid-template-columns: 1fr;
+  }
+}
