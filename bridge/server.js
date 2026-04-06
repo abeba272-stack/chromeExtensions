@@ -28,7 +28,7 @@ const os      = require('os');
 
 const PORT         = Number(process.env.PORT)  || 4123;
 const HOST         = process.env.HOST          || '127.0.0.1';
-const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR  || path.join(os.tmpdir(), 'wavedrop-downloads');
+const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR  || path.join(os.homedir(), 'Desktop', 'Youtube Songs');
 const MAX_TASKS    = 50; // evict oldest when over this limit
 
 /* ── Setup ───────────────────────────────────────────────────────────────── */
