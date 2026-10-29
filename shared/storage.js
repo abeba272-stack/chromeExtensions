@@ -54,7 +54,7 @@
 
   function createDefaultPanelState() {
     return {
-      mode: PANEL_MODES.OPEN,
+      mode: PANEL_MODES.CLOSED,
       anchored: true,
       top: 26,
       left: 26
@@ -63,31 +63,45 @@
 
   function normalizePanelState(value = {}) {
     return {
-      mode: Object.values(PANEL_MODES).includes(value.mode) ? value.mode : PANEL_MODES.OPEN,
+      mode: Object.values(PANEL_MODES).includes(value.mode) ? value.mode : PANEL_MODES.CLOSED,
       anchored: value.anchored !== false,
       top: sanitizeNumber(value.top, 26),
       left: sanitizeNumber(value.left, 26)
     };
   }
 
+  // Bridge endpoint is hardcoded — personal tool, not for public release
+  const HARDCODED_BRIDGE_ENDPOINT = "http://127.0.0.1:4123/api/download";
+  // Apple Music search — opens directly in the macOS Music app via music:// scheme
+  const HARDCODED_EXTERNAL_TOOL = "music://music.apple.com/search?term={title}";
+
   function createDefaultPreferences() {
     return {
-      localBridgeEndpoint: "",
-      externalToolUrlTemplate: "https://www.google.com/search?q={title}%20{channel}%20{url}",
-      preferredFormat: DOWNLOAD_FORMATS.MP4
+      localBridgeEndpoint: HARDCODED_BRIDGE_ENDPOINT,
+      externalToolUrlTemplate: HARDCODED_EXTERNAL_TOOL,
+      preferredFormat: DOWNLOAD_FORMATS.MP4,
+      // Auto-add MP3 downloads to the Apple Music playlist — on by default.
+      musicImportEnabled: true,
+      // Chosen Apple Music target playlist (empty → the bridge's configured default).
+      musicPlaylistId: "",
+      musicPlaylistName: ""
     };
   }
 
   function normalizePreferences(value = {}) {
     return {
-      localBridgeEndpoint: normalizeText(value.localBridgeEndpoint),
-      externalToolUrlTemplate: normalizeText(
-        value.externalToolUrlTemplate,
-        createDefaultPreferences().externalToolUrlTemplate
-      ),
+      // Always use hardcoded endpoint — ignore any saved value
+      localBridgeEndpoint: HARDCODED_BRIDGE_ENDPOINT,
+      // Always use Apple Music — ignore any saved value
+      externalToolUrlTemplate: HARDCODED_EXTERNAL_TOOL,
       preferredFormat: Object.values(DOWNLOAD_FORMATS).includes(value.preferredFormat)
         ? value.preferredFormat
-        : DOWNLOAD_FORMATS.MP4
+        : DOWNLOAD_FORMATS.MP4,
+      // Default on; only an explicit false disables the Music hand-off.
+      musicImportEnabled: value.musicImportEnabled !== false,
+      // Remembered target playlist; the persistent ID is the authoritative key.
+      musicPlaylistId: normalizeText(value.musicPlaylistId),
+      musicPlaylistName: normalizeText(value.musicPlaylistName)
     };
   }
 
@@ -102,15 +116,25 @@
       provider: "localBridge",
       videoTitle: "",
       updatedAt: "",
-      browserDownloadId: null
+      browserDownloadId: null,
+      musicImport: "",
+      musicMessage: ""
     };
   }
+
+  const MUSIC_IMPORT_STATES = [
+    "", "idle", "importing", "added", "duplicate", "skipped", "failed", "needs_permission"
+  ];
 
   function normalizeTaskState(value = {}) {
     const defaultState = createDefaultTaskState();
     const status = Object.values(TASK_STATUS).includes(value.status)
       ? value.status
       : defaultState.status;
+
+    const musicImport = MUSIC_IMPORT_STATES.includes(value.musicImport)
+      ? value.musicImport
+      : "";
 
     return {
       id: normalizeText(value.id),
@@ -124,7 +148,9 @@
       updatedAt: normalizeText(value.updatedAt),
       browserDownloadId: Number.isFinite(Number(value.browserDownloadId))
         ? Number(value.browserDownloadId)
-        : null
+        : null,
+      musicImport,
+      musicMessage: normalizeText(value.musicMessage)
     };
   }
 

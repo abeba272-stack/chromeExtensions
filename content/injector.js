@@ -281,7 +281,11 @@
       hydratePromise = Messages.sendRuntime(MESSAGE_TYPES.GET_APP_STATE)
         .then((response) => {
           const data = response?.data || {};
-          state.panelState = Storage.normalizePanelState(data.panelState);
+          // Always start closed — panel opens only when user clicks the 999 orb
+          state.panelState = Storage.normalizePanelState({
+            ...(data.panelState || {}),
+            mode: PANEL_MODES.CLOSED
+          });
           state.taskState = Storage.normalizeTaskState(data.taskState);
           state.preferences = Storage.normalizePreferences(data.preferences);
         })
@@ -395,6 +399,17 @@
 
   async function handleSecondaryAction(action) {
     try {
+      if (action === "reveal-music") {
+        try {
+          const revealUrl = new URL("/api/reveal", state.preferences.localBridgeEndpoint);
+          revealUrl.searchParams.set("playlist", "Juice WRLD Unreleased");
+          await fetch(revealUrl.toString());
+        } catch (_) {
+          // Best-effort — nothing actionable to surface in the panel.
+        }
+        return;
+      }
+
       if (action === "external") {
         const response = await Messages.sendRuntime(MESSAGE_TYPES.OPEN_EXTERNAL_TOOL, {
           video: state.video,

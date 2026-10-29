@@ -675,17 +675,17 @@ body {
 }
 
 .wd-popup-button-title {
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .wd-popup-button-copy {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1;
-  color: rgba(155, 172, 205, 0.48);
-  letter-spacing: 0.03em;
+  color: var(--wd-text-soft);
+  letter-spacing: 0.02em;
 }
 
 /* Small secondary actions */
@@ -695,6 +695,81 @@ body {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;
+}
+
+/* ─── Target-playlist selector (MP3 only) ────────────────────────────────── */
+
+.wd-popup-playlist {
+  display: grid;
+  gap: 6px;
+}
+
+.wd-popup-playlist.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.wd-popup-playlist-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(155, 172, 205, 0.4);
+}
+.wd-popup-playlist-label svg { opacity: 0.8; color: #b39dff; flex-shrink: 0; }
+
+.wd-popup-select-wrap {
+  position: relative;
+  display: block;
+}
+
+.wd-popup-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 32px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(73, 182, 255, 0.1), rgba(217, 72, 255, 0.07)),
+    rgba(0, 0, 0, 0.32);
+  color: #eaecf4;
+  font-family: var(--wd-font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  outline: none;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.wd-popup-select:hover { border-color: rgba(100, 243, 255, 0.3); }
+
+.wd-popup-select:focus {
+  border-color: rgba(100, 243, 255, 0.4);
+  box-shadow: 0 0 0 2px rgba(100, 243, 255, 0.08);
+}
+
+/* Force a dark native option list so it isn't white-on-white */
+.wd-popup-select option {
+  background: #0c0e1a;
+  color: #eaecf4;
+}
+
+.wd-popup-select-caret {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: rgba(185, 200, 235, 0.6);
+  pointer-events: none;
 }
 
 /* ─── Notice banners ─────────────────────────────────────────────────────── */
@@ -789,6 +864,247 @@ body {
   font-size: 11px;
   line-height: 1.5;
   color: rgba(155, 172, 205, 0.5);
+}
+
+/* Bridge-offline badge — warm red accent */
+.wd-popup-badge[data-bridge="offline"] {
+  border-color: rgba(255, 100, 144, 0.3);
+  color: rgba(255, 180, 200, 0.8);
+}
+
+/* ─── Apple Music hand-off row ───────────────────────────────────────────── */
+
+.wd-popup-music-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: rgba(200, 210, 235, 0.8);
+  animation: wdMusicRowIn 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes wdMusicRowIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.wd-popup-music-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.wd-popup-music-icon svg { display: block; }
+
+.wd-popup-music-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Importing — blue, spinner ring around a small note */
+.wd-popup-music-active {
+  border-color: rgba(73, 182, 255, 0.28);
+  background: rgba(73, 182, 255, 0.08);
+  color: #d6eeff;
+}
+.wd-popup-music-active .wd-popup-music-icon svg {
+  color: #7cc7ff;
+  transform: scale(0.68);
+  opacity: 0.9;
+}
+
+.wd-popup-music-spinner {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(124, 199, 255, 0.22);
+  border-top-color: #7cc7ff;
+  animation: wdSpin 0.7s linear infinite;
+}
+@keyframes wdSpin { to { transform: rotate(360deg); } }
+
+/* Added — success green + one-time burst ring */
+.wd-popup-music-success {
+  border-color: rgba(125, 244, 192, 0.3);
+  background: rgba(125, 244, 192, 0.1);
+  color: #d6ffe9;
+  animation:
+    wdMusicRowIn 300ms cubic-bezier(0.16, 1, 0.3, 1) both,
+    wdMusicBurst 640ms cubic-bezier(0.16, 1, 0.3, 1) 120ms;
+}
+.wd-popup-music-success .wd-popup-music-icon svg { color: #7df4c0; }
+.wd-popup-music-success .wd-popup-music-icon::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid rgba(125, 244, 192, 0.6);
+  opacity: 0;
+  animation: wdMusicRing 640ms ease-out 160ms;
+}
+@keyframes wdMusicBurst {
+  0%   { box-shadow: 0 0 0 0 rgba(125, 244, 192, 0); }
+  30%  { box-shadow: 0 0 22px 2px rgba(125, 244, 192, 0.32); }
+  100% { box-shadow: 0 0 0 0 rgba(125, 244, 192, 0); }
+}
+@keyframes wdMusicRing {
+  0%   { opacity: 0.85; transform: scale(0.5); }
+  100% { opacity: 0;    transform: scale(1.9); }
+}
+
+/* Duplicate / skipped — muted */
+.wd-popup-music-muted { color: rgba(170, 182, 210, 0.62); }
+.wd-popup-music-muted .wd-popup-music-icon svg { color: rgba(170, 182, 210, 0.6); }
+
+/* Failed — pink/red */
+.wd-popup-music-error {
+  border-color: rgba(255, 100, 144, 0.28);
+  background: rgba(255, 100, 144, 0.08);
+  color: #ffd0dd;
+}
+.wd-popup-music-error .wd-popup-music-icon svg { color: #ff8cb8; }
+
+/* Needs permission — amber warn */
+.wd-popup-music-warn {
+  border-color: rgba(255, 191, 106, 0.3);
+  background: rgba(255, 191, 106, 0.09);
+  color: #ffe6c2;
+}
+.wd-popup-music-warn .wd-popup-music-icon svg { color: #ffbf6a; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wd-popup-music-spinner { animation-duration: 1.6s; }
+  .wd-popup-music-success { animation: wdMusicRowIn 300ms ease both; }
+  .wd-popup-music-success .wd-popup-music-icon::after { display: none; }
+}
+
+/* ─── Reveal-in-Music button (inside the music row) ──────────────────────── */
+
+.wd-popup-music-reveal {
+  flex-shrink: 0;
+  margin-left: auto;
+  appearance: none;
+  border: 1px solid rgba(125, 244, 192, 0.3);
+  border-radius: 999px;
+  background: rgba(125, 244, 192, 0.1);
+  color: #d6ffe9;
+  font: 600 10.5px/1 var(--wd-font-body);
+  letter-spacing: 0.02em;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background   150ms ease,
+    border-color 150ms ease,
+    transform    150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.wd-popup-music-reveal:hover {
+  background: rgba(125, 244, 192, 0.18);
+  border-color: rgba(125, 244, 192, 0.5);
+  transform: translateY(-1px);
+}
+.wd-popup-music-reveal:active { transform: translateY(0) scale(0.97); }
+.wd-popup-music-reveal:focus-visible {
+  outline: 2px solid rgba(125, 244, 192, 0.6);
+  outline-offset: 2px;
+}
+
+/* Duplicate state → neutral (not success-green) reveal button */
+.wd-popup-music-muted .wd-popup-music-reveal {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(210, 218, 240, 0.85);
+}
+
+/* ─── Settings toggle switch ─────────────────────────────────────────────── */
+
+.wd-popup-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.wd-popup-toggle-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.wd-popup-toggle-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.wd-popup-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #d7dcec;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), background 200ms ease;
+}
+
+.wd-popup-toggle-input:checked + .wd-popup-toggle-track {
+  background: linear-gradient(135deg, rgba(73, 182, 255, 0.9), rgba(217, 72, 255, 0.85));
+  border-color: rgba(100, 243, 255, 0.4);
+  box-shadow: 0 0 16px rgba(73, 182, 255, 0.3);
+}
+
+.wd-popup-toggle-input:checked + .wd-popup-toggle-track .wd-popup-toggle-thumb {
+  transform: translateX(18px);
+  background: #ffffff;
+}
+
+.wd-popup-toggle-input:focus-visible + .wd-popup-toggle-track {
+  outline: 2px solid rgba(134, 102, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.wd-popup-toggle-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.wd-popup-toggle-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #eaecf4;
+}
+.wd-popup-toggle-title svg { opacity: 0.75; color: #b39dff; flex-shrink: 0; }
+
+.wd-popup-toggle-sub {
+  font-size: 10px;
+  color: rgba(155, 172, 205, 0.5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ─── Settings inputs ────────────────────────────────────────────────────── */

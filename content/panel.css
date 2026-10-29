@@ -341,6 +341,116 @@
   margin: 0;
 }
 
+/* ─── Apple Music hand-off row (panel) ───────────────────────────────────── */
+
+.wd-panel-music-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-left-width: 2px;
+  border-left-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(200, 210, 235, 0.8);
+  animation: wdPanelMusicIn 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes wdPanelMusicIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.wd-panel-music-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.wd-panel-music-icon svg { display: block; }
+
+.wd-panel-music-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wd-panel-music-active {
+  border-left-color: rgba(100, 120, 255, 0.85);
+  background: rgba(100, 120, 255, 0.05);
+  color: #d6eeff;
+}
+.wd-panel-music-active .wd-panel-music-icon svg { color: #7cc7ff; transform: scale(0.66); opacity: 0.9; }
+
+.wd-panel-music-spinner {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(124, 199, 255, 0.22);
+  border-top-color: #7cc7ff;
+  animation: wdPanelSpin 0.7s linear infinite;
+}
+@keyframes wdPanelSpin { to { transform: rotate(360deg); } }
+
+.wd-panel-music-success {
+  border-left-color: rgba(125, 244, 192, 0.85);
+  background: rgba(125, 244, 192, 0.06);
+  color: #d6ffe9;
+}
+.wd-panel-music-success .wd-panel-music-icon svg { color: #7df4c0; }
+
+.wd-panel-music-muted { color: rgba(170, 182, 210, 0.62); }
+.wd-panel-music-muted .wd-panel-music-icon svg { color: rgba(170, 182, 210, 0.6); }
+
+.wd-panel-music-error {
+  border-left-color: rgba(255, 100, 144, 0.85);
+  background: rgba(255, 100, 144, 0.05);
+  color: #ffd0dd;
+}
+.wd-panel-music-error .wd-panel-music-icon svg { color: #ff8cb8; }
+
+.wd-panel-music-warn {
+  border-left-color: rgba(255, 191, 106, 0.85);
+  background: rgba(255, 191, 106, 0.05);
+  color: #ffe6c2;
+}
+.wd-panel-music-warn .wd-panel-music-icon svg { color: #ffbf6a; }
+
+.wd-panel-music-reveal {
+  flex-shrink: 0;
+  margin-left: auto;
+  border: 1px solid rgba(125, 244, 192, 0.3);
+  border-radius: 3px;
+  background: rgba(125, 244, 192, 0.08);
+  color: #d6ffe9;
+  font: 600 10px/1 var(--wd-font-body);
+  letter-spacing: 0.02em;
+  padding: 5px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms ease, border-color 150ms ease, transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.wd-panel-music-reveal:hover {
+  background: rgba(125, 244, 192, 0.15);
+  border-color: rgba(125, 244, 192, 0.5);
+  transform: translateY(-1px);
+}
+.wd-panel-music-reveal:active { transform: translateY(0) scale(0.97); }
+
+.wd-panel-music-muted .wd-panel-music-reveal {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(210, 218, 240, 0.85);
+}
+
 /* ─── Window controls ────────────────────────────────────────────────────── */
 
 .wd-window-controls {
@@ -444,10 +554,20 @@
 
 /* ─── Atmosphere card ────────────────────────────────────────────────────── */
 
+/*
+ * Decorative "999" watermark. panel.js injects an inline <svg> here whose
+ * fill is currentColor, so a dark color / background-clip:text trick renders
+ * it invisible. Use a faint violet fill instead so it reads as a subtle mark.
+ */
 .wd-nine-nine-nine {
-  background: linear-gradient(180deg, rgba(10, 10, 14, 0.7), rgba(10, 10, 14, 0.1));
-  -webkit-background-clip: text;
-  color: transparent;
+  background: none;
+  -webkit-background-clip: border-box;
+  color: rgba(160, 140, 220, 0.22);
+  text-shadow: 0 0 26px rgba(134, 102, 255, 0.16);
+}
+
+.wd-nine-nine-nine svg {
+  filter: drop-shadow(0 0 18px rgba(134, 102, 255, 0.18));
 }
 
 /* ─── Drag handle ────────────────────────────────────────────────────────── */

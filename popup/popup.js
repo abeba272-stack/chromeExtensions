@@ -16,7 +16,10 @@ const state = {
   onYouTube: false,
   loading: true,
   notice: "",
-  noticeTone: "info"
+  noticeTone: "info",
+  bridgeOnline: null,      // null = unknown, true/false once checked
+  musicConfig: null,       // { enabled, playlist, formats } from the bridge health
+  playlists: []            // [{ id, name, count }] from GET /api/playlists
 };
 
 /*
@@ -31,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initializePopup();
   root.addEventListener("click", handleClick);
   root.addEventListener("input", handleInput);
+  root.addEventListener("change", handleChange);
   initControlMenu();
 });
 
@@ -137,7 +141,90 @@ function getStatusLabel(taskState) {
 }
 
 function getBridgeState() {
-  return state.preferences.localBridgeEndpoint ? "Bridge ready" : "Bridge off";
+  if (state.bridgeOnline === false) return "Bridge offline";
+  if (state.bridgeOnline === true) return "Bridge ready";
+  return "Bridge …";
+}
+
+/**
+ * Derive the bridge origin's /api/health URL from the configured download
+ * endpoint (…/api/download → …/api/health).
+ */
+function getBridgeHealthUrl() {
+  try {
+    return new URL("/api/health", state.preferences.localBridgeEndpoint).toString();
+  } catch (_) {
+    return "";
+  }
+}
+
+/**
+ * Ping the bridge once so the UI can show an honest online/offline state and
+ * learn the Music hand-off config (playlist name, formats).
+ */
+async function checkBridgeHealth() {
+  const url = getBridgeHealthUrl();
+  if (!url) {
+    state.bridgeOnline = false;
+    return;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 1500);
+    const res = await fetch(url, { signal: controller.signal });
+    window.clearTimeout(timer);
+    if (!res.ok) throw new Error("bad_health");
+    const data = await res.json();
+    state.bridgeOnline = true;
+    state.musicConfig = data && data.music ? data.music : null;
+  } catch (_) {
+    state.bridgeOnline = false;
+  }
+}
+
+/**
+ * Pull the user's Apple Music playlists from the bridge so the target-playlist
+ * picker can list them.  Silent on failure — the picker then just shows the
+ * configured default.
+ */
+async function fetchPlaylists() {
+  let url;
+  try {
+    url = new URL("/api/playlists", state.preferences.localBridgeEndpoint).toString();
+  } catch (_) {
+    return;
+  }
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.ok && Array.isArray(data.playlists)) {
+      state.playlists = data.playlists;
+    }
+  } catch (_) {
+    // Bridge offline — selector falls back to the default option.
+  }
+}
+
+/**
+ * The Apple Music playlist a download should land in: the user's remembered
+ * choice if set, otherwise the bridge's configured default.
+ */
+function getChosenPlaylist() {
+  const prefId = state.preferences.musicPlaylistId;
+  const prefName = state.preferences.musicPlaylistName;
+  if (prefId || prefName) {
+    return {
+      id: prefId || "",
+      name: prefName || (state.musicConfig && state.musicConfig.playlist) || "Juice WRLD Unreleased"
+    };
+  }
+  return {
+    id: (state.musicConfig && state.musicConfig.playlistId) || "",
+    name: (state.musicConfig && state.musicConfig.playlist) || "Juice WRLD Unreleased"
+  };
 }
 
 function getPopupVideo() {
@@ -180,6 +267,13 @@ async function initializePopup() {
     state.panelState = Storage.normalizePanelState(appStateResponse?.data?.panelState);
     state.preferences = Storage.normalizePreferences(appStateResponse?.data?.preferences);
     state.draftPreferences = { ...state.preferences };
+
+    // Bridge health — fire and forget; re-render when the verdict lands.
+    // Once the bridge answers, pull the playlist list for the target picker.
+    checkBridgeHealth().then(() => {
+      render();
+      fetchPlaylists().then(() => render());
+    });
 
     const context = await getActiveTabContext(state.activeTab);
     state.onYouTube = context.pageSupported;
@@ -301,6 +395,7 @@ function renderDownloadSection() {
           <span class="wd-popup-button-copy">${busy && state.taskState.format === DOWNLOAD_FORMATS.MP3 ? getStatusLabel(state.taskState) : "Audio only"}</span>
         </button>
       </div>
+      ${renderPlaylistSelector()}
       <div class="wd-popup-utility-row">
         <button class="wd-popup-button wd-popup-button-secondary" data-action="open-panel">Panel on page</button>
         <button class="wd-popup-button wd-popup-button-secondary" data-action="external" ${busy ? "disabled" : ""}>${extIcon} External tool</button>
@@ -309,12 +404,99 @@ function renderDownloadSection() {
   `;
 }
 
+/**
+ * Target-playlist picker (MP3 only).  Lists the user's real Apple Music
+ * playlists; the selected value is the playlist's persistent ID.  Disabled
+ * (dimmed) when the Music hand-off toggle is off.
+ */
+function renderPlaylistSelector() {
+  const importOn = state.preferences.musicImportEnabled !== false;
+  const Icons = window.WaveDropIcons || {};
+  const noteIcon = Icons.musicNote ? Icons.musicNote(12) : "";
+  const playlists = Array.isArray(state.playlists) ? state.playlists : [];
+  const chosen = getChosenPlaylist();
+
+  let options;
+  if (!playlists.length) {
+    options = `<option value="${escapeHtml(chosen.id)}">${escapeHtml(chosen.name)}</option>`;
+  } else {
+    options = playlists.map((p) => {
+      const selected = (chosen.id && p.id === chosen.id) || (!chosen.id && p.name === chosen.name);
+      return `<option value="${escapeHtml(p.id)}" data-name="${escapeHtml(p.name)}"${selected ? " selected" : ""}>${escapeHtml(p.name)} · ${Number(p.count) || 0}</option>`;
+    }).join("");
+  }
+
+  return `
+    <div class="wd-popup-playlist${importOn ? "" : " is-disabled"}">
+      <span class="wd-popup-playlist-label">${noteIcon}<span>Ziel-Playlist · nur MP3</span></span>
+      <div class="wd-popup-select-wrap">
+        <select class="wd-popup-select" data-select="musicPlaylist" ${importOn ? "" : "disabled"} aria-label="Ziel-Playlist für MP3-Downloads">
+          ${options}
+        </select>
+        <svg class="wd-popup-select-caret" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+  `;
+}
+
+function defaultMusicMessage(st, playlist) {
+  switch (st) {
+    case "importing":        return `Adding to ${playlist}…`;
+    case "added":            return `Added to ${playlist}`;
+    case "duplicate":        return `Already in ${playlist}`;
+    case "skipped":          return "Not added to Music";
+    case "failed":           return "Music import failed";
+    case "needs_permission": return "Allow Music automation in System Settings";
+    default:                 return "";
+  }
+}
+
+/**
+ * The Apple Music hand-off row — appears under the progress bar once a
+ * download reaches the Music stage.  Style + icon reflect the import state.
+ */
+function renderMusicRow(taskState) {
+  const st = taskState.musicImport;
+  if (!st || st === "idle") {
+    return "";
+  }
+
+  const Icons = window.WaveDropIcons || {};
+  const noteIcon  = Icons.musicNote ? Icons.musicNote(13) : "";
+  const checkIcon = Icons.check ? Icons.check(13) : "";
+  const alertIcon = Icons.alert ? Icons.alert(13) : "";
+
+  const playlist = getChosenPlaylist().name;
+  const msg = taskState.musicMessage || defaultMusicMessage(st, playlist);
+
+  let tone = "info";
+  let icon = noteIcon;
+  if (st === "added")            { tone = "success"; icon = checkIcon; }
+  else if (st === "duplicate")   { tone = "muted";   icon = checkIcon; }
+  else if (st === "importing")   { tone = "active";  icon = noteIcon; }
+  else if (st === "skipped")     { tone = "muted";   icon = noteIcon; }
+  else if (st === "failed")      { tone = "error";   icon = alertIcon; }
+  else if (st === "needs_permission") { tone = "warn"; icon = alertIcon; }
+
+  const spinner = st === "importing" ? `<span class="wd-popup-music-spinner" aria-hidden="true"></span>` : "";
+  const canReveal = st === "added" || st === "duplicate";
+  const reveal = canReveal
+    ? `<button class="wd-popup-music-reveal" data-action="reveal-music" title="Show the playlist in Apple Music">In Music anzeigen</button>`
+    : "";
+
+  return `
+    <div class="wd-popup-music-row wd-popup-music-${escapeHtml(tone)}" data-music="${escapeHtml(st)}">
+      <span class="wd-popup-music-icon">${spinner}${icon}</span>
+      <span class="wd-popup-music-text">${escapeHtml(msg)}</span>
+      ${reveal}
+    </div>
+  `;
+}
+
 function renderStatusSection() {
   const progress = Math.max(0, Math.min(100, Number(state.taskState.progress) || 0));
   const copy = state.taskState.error || state.taskState.message || "Ready";
   const activeFormat = (state.taskState.format || state.preferences.preferredFormat || DOWNLOAD_FORMATS.MP4).toUpperCase();
-  const Icons = window.WaveDropIcons || {};
-  const gearIcon = Icons.gear ? Icons.gear(12) : "";
 
   return `
     <section class="wd-popup-section">
@@ -328,26 +510,35 @@ function renderStatusSection() {
       </div>
       <div class="wd-popup-progress-head">
         <p class="wd-popup-status-copy">${escapeHtml(copy)}</p>
-        <span class="wd-popup-badge">${escapeHtml(activeFormat)} &nbsp;·&nbsp; ${escapeHtml(getBridgeState())}</span>
+        <span class="wd-popup-badge" data-bridge="${state.bridgeOnline === false ? 'offline' : 'online'}">${escapeHtml(activeFormat)} &nbsp;·&nbsp; ${escapeHtml(getBridgeState())}</span>
       </div>
-      <div class="wd-popup-section-head wd-popup-section-subhead">
-        <span class="wd-popup-section-title">${gearIcon} &nbsp;Bridge settings</span>
-      </div>
-      <div class="wd-popup-settings-grid">
-        <label class="wd-popup-field">
-          <span class="wd-popup-field-label">Bridge endpoint</span>
-          <input class="wd-popup-input" data-field="localBridgeEndpoint" type="text" spellcheck="false" value="${escapeHtml(state.draftPreferences.localBridgeEndpoint)}" placeholder="http://127.0.0.1:4123/api/download" />
-        </label>
-        <label class="wd-popup-field">
-          <span class="wd-popup-field-label">External tool URL template</span>
-          <input class="wd-popup-input" data-field="externalToolUrlTemplate" type="text" spellcheck="false" value="${escapeHtml(state.draftPreferences.externalToolUrlTemplate)}" placeholder="https://example.com/?url={url}" />
-        </label>
-      </div>
+      ${renderMusicRow(state.taskState)}
       <div class="wd-popup-utility-row">
-        <button class="wd-popup-button wd-popup-button-secondary" data-action="save-settings">Save</button>
         <button class="wd-popup-button wd-popup-button-secondary" data-action="reset-task">Clear status</button>
       </div>
-      <p class="wd-popup-settings-note">Tokens: <code>{url}</code> <code>{title}</code> <code>{channel}</code> <code>{duration}</code> <code>{videoId}</code> <code>{format}</code>.</p>
+    </section>
+  `;
+}
+
+function renderSettingsSection() {
+  const on = state.preferences.musicImportEnabled !== false;
+  const playlist = getChosenPlaylist().name;
+  const Icons = window.WaveDropIcons || {};
+  const noteIcon = Icons.musicNote ? Icons.musicNote(14) : "";
+
+  return `
+    <section class="wd-popup-section wd-popup-settings-section">
+      <div class="wd-popup-section-head">
+        <span class="wd-popup-section-title">Settings</span>
+      </div>
+      <label class="wd-popup-toggle">
+        <input type="checkbox" class="wd-popup-toggle-input" data-toggle="musicImportEnabled" ${on ? "checked" : ""} />
+        <span class="wd-popup-toggle-track"><span class="wd-popup-toggle-thumb"></span></span>
+        <span class="wd-popup-toggle-copy">
+          <span class="wd-popup-toggle-title">${noteIcon}<span>In Apple Music übertragen</span></span>
+          <span class="wd-popup-toggle-sub">MP3 → ${escapeHtml(playlist)}</span>
+        </span>
+      </label>
     </section>
   `;
 }
@@ -381,6 +572,7 @@ function render() {
     <div class="wd-popup-layout${enterClass}">
       ${renderDownloadSection()}
       ${renderStatusSection()}
+      ${renderSettingsSection()}
     </div>
   `;
 }
@@ -490,14 +682,18 @@ async function handleDownload(format) {
       preferences: state.preferences
     });
   } catch (err) {
+    const offline = isBridgeOfflineError(err);
+    if (offline) state.bridgeOnline = false;
     state.taskState = await persistTaskUpdate({
       status: TASK_STATUS.FAILED,
       progress: 0,
-      message: Storage.normalizeText(err?.message, Constants.DEFAULT_STRINGS.failed),
-      error: Storage.normalizeText(err?.message, "bridge_error")
+      message: offline
+        ? "Bridge offline — is the WaveDrop bridge running?"
+        : Storage.normalizeText(err?.message, Constants.DEFAULT_STRINGS.failed),
+      error: offline ? "bridge_offline" : Storage.normalizeText(err?.message, "bridge_error")
     });
     render();
-    throw err; // Surfaces to handleClick → handlePopupError
+    throw offline ? new Error("bridge_offline") : err; // Surfaces to handleClick → handlePopupError
   }
 
   /* ── 3a. Bridge responded synchronously with a download URL ──────────── */
@@ -541,6 +737,8 @@ async function handleDownload(format) {
     const message = String(pollData.message || Constants.DEFAULT_STRINGS.downloading);
     const downloadUrl = String(pollData.downloadUrl || "");
     const pollError = String(pollData.error || "");
+    const musicImport = String(pollData.musicImport || "");
+    const musicMessage = String(pollData.musicMessage || "");
 
     if (nextStatus === TASK_STATUS.FAILED) {
       state.taskState = await persistTaskUpdate({
@@ -554,7 +752,7 @@ async function handleDownload(format) {
     }
 
     if (nextStatus === TASK_STATUS.COMPLETE && downloadUrl) {
-      await _finalizeDownload(video, format, downloadUrl, message);
+      await _finalizeDownload(video, format, downloadUrl, message, musicImport, musicMessage);
       return;
     }
 
@@ -562,7 +760,9 @@ async function handleDownload(format) {
       status: nextStatus,
       progress,
       message,
-      error: ""
+      error: "",
+      musicImport,
+      musicMessage
     });
     render();
   }
@@ -582,27 +782,18 @@ async function handleDownload(format) {
  * Updates task state to COMPLETE regardless of whether chrome.downloads
  * succeeds (partial failures are surfaced via a notice, not a broken state).
  */
-async function _finalizeDownload(video, format, downloadUrl, bridgeMessage) {
-  let browserDownloadId = null;
-  let downloadError = "";
-
-  try {
-    browserDownloadId = await chrome.downloads.download({
-      url: downloadUrl,
-      filename: createPopupDownloadFilename(video, format),
-      saveAs: false
-    });
-  } catch (dlErr) {
-    downloadError = Storage.normalizeText(dlErr?.message, "browser_download_failed");
-    setNotice("File ready but browser download failed — try again.", "error");
-  }
-
+async function _finalizeDownload(video, format, downloadUrl, bridgeMessage, musicImport, musicMessage) {
+  // The bridge already saved the file to the Youtube Songs folder (and, for
+  // MP3, handed it to Apple Music).  We deliberately do NOT trigger a second
+  // browser download into the Downloads folder — one copy is enough.
   state.taskState = await persistTaskUpdate({
-    status: downloadError ? TASK_STATUS.FAILED : TASK_STATUS.COMPLETE,
-    progress: downloadError ? 0 : 100,
-    message: downloadError || bridgeMessage || Constants.DEFAULT_STRINGS.complete,
-    error: downloadError,
-    browserDownloadId
+    status: TASK_STATUS.COMPLETE,
+    progress: 100,
+    message: bridgeMessage || Constants.DEFAULT_STRINGS.complete,
+    error: "",
+    browserDownloadId: null,
+    musicImport: musicImport || "",
+    musicMessage: musicMessage || ""
   });
   render();
 }
@@ -665,10 +856,96 @@ function handleInput(event) {
   };
 }
 
+async function handleChange(event) {
+  const select = event.target.closest("[data-select='musicPlaylist']");
+  if (select) {
+    const opt = select.options[select.selectedIndex];
+    const id = select.value || "";
+    const name = opt ? (opt.getAttribute("data-name") || opt.textContent || "").trim() : "";
+    await savePlaylistPreference(id, name);
+    return;
+  }
+
+  const toggle = event.target.closest("[data-toggle]");
+  if (!toggle) {
+    return;
+  }
+  await saveMusicPreference(toggle.dataset.toggle, !!toggle.checked);
+}
+
+async function savePlaylistPreference(id, name) {
+  const next = { ...state.preferences, musicPlaylistId: id, musicPlaylistName: name };
+  try {
+    const response = await Messages.sendRuntime(MESSAGE_TYPES.SET_PREFERENCES, { preferences: next });
+    state.preferences = Storage.normalizePreferences(response?.data || next);
+  } catch (_) {
+    state.preferences = Storage.normalizePreferences(next);
+  }
+  state.draftPreferences = { ...state.preferences };
+  setNotice(name ? `Ziel-Playlist: ${name}` : "Ziel-Playlist gesetzt", "success");
+}
+
+async function saveMusicPreference(key, value) {
+  const next = { ...state.preferences, [key]: value };
+  try {
+    const response = await Messages.sendRuntime(MESSAGE_TYPES.SET_PREFERENCES, { preferences: next });
+    state.preferences = Storage.normalizePreferences(response?.data || next);
+  } catch (_) {
+    state.preferences = Storage.normalizePreferences(next);
+  }
+  state.draftPreferences = { ...state.preferences };
+  if (key === "musicImportEnabled") {
+    setNotice(value ? "Auto-Import in Apple Music: an" : "Auto-Import in Apple Music: aus", "success");
+  } else {
+    render();
+  }
+}
+
+async function revealInMusic() {
+  const chosen = getChosenPlaylist();
+  let url;
+  try {
+    url = new URL("/api/reveal", state.preferences.localBridgeEndpoint);
+    url.searchParams.set("playlist", chosen.name);
+    if (chosen.id) url.searchParams.set("playlistId", chosen.id);
+  } catch (_) {
+    setNotice("Invalid bridge endpoint", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch(url.toString());
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      setNotice("Opened in Apple Music", "success");
+    } else if (data.error === "needs_permission") {
+      setNotice("Allow Music automation (System Settings → Automation)", "error");
+    } else {
+      setNotice("Could not open Music", "error");
+    }
+  } catch (_) {
+    state.bridgeOnline = false;
+    setNotice("Bridge offline?", "error");
+  }
+}
+
+function isBridgeOfflineError(error) {
+  const m = String(error?.message || "").toLowerCase();
+  return (
+    m.includes("failed to fetch") ||
+    m.includes("networkerror") ||
+    m.includes("load failed") ||
+    m.includes("fetch")
+  );
+}
+
 function getReadableError(error) {
   const code = Storage.normalizeText(error?.message, "");
   if (code === "bridge_not_configured") {
     return Constants.DEFAULT_STRINGS.bridgeError;
+  }
+  if (code === "bridge_offline") {
+    return "Bridge offline — start the WaveDrop bridge and try again.";
   }
   if (code === "task_already_running") {
     return "A task is already running.";
@@ -721,6 +998,9 @@ async function handleClick(event) {
         break;
       case "external":
         await openExternalTool();
+        break;
+      case "reveal-music":
+        await revealInMusic();
         break;
       case "save-settings":
         await savePreferences();

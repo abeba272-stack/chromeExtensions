@@ -58,7 +58,9 @@
       filename: Storage.normalizeText(data?.filename),
       taskId: Storage.normalizeText(data?.taskId),
       statusUrl: Storage.normalizeText(data?.statusUrl),
-      format: Storage.normalizeText(data?.format, format)
+      format: Storage.normalizeText(data?.format, format),
+      musicImport: Storage.normalizeText(data?.musicImport),
+      musicMessage: Storage.normalizeText(data?.musicMessage)
     };
   }
 
@@ -123,7 +125,11 @@
       channel: video.channelName,
       duration: video.duration,
       videoId: video.videoId,
-      thumbnail: video.thumbnail
+      thumbnail: video.thumbnail,
+      music: preferences.musicImportEnabled !== false,
+      // Target playlist for the Apple Music hand-off (MP3 only); empty → bridge default.
+      playlist: preferences.musicPlaylistName || "",
+      playlistId: preferences.musicPlaylistId || ""
     };
 
     onProgress({
@@ -156,7 +162,9 @@
         (format === DOWNLOAD_FORMATS.MP3
           ? DEFAULT_STRINGS.preparingMp3
           : DEFAULT_STRINGS.preparingMp4),
-      error: ""
+      error: "",
+      musicImport: initialPayload.musicImport,
+      musicMessage: initialPayload.musicMessage
     });
 
     if (!statusUrl) {
@@ -180,7 +188,9 @@
         status: payload.status,
         progress: Math.max(20, payload.progress),
         message: payload.message || DEFAULT_STRINGS.downloading,
-        error: ""
+        error: "",
+        musicImport: payload.musicImport,
+        musicMessage: payload.musicMessage
       });
     }
 
@@ -222,7 +232,11 @@
       channel: video.channelName,
       duration: video.duration,
       videoId: video.videoId,
-      thumbnail: video.thumbnail
+      thumbnail: video.thumbnail,
+      music: preferences.musicImportEnabled !== false,
+      // Target playlist for the Apple Music hand-off (MP3 only); empty → bridge default.
+      playlist: preferences.musicPlaylistName || "",
+      playlistId: preferences.musicPlaylistId || ""
     };
 
     const initialResponse = await postBridgeRequest(requestUrl, bridgePayload);

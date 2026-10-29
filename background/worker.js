@@ -188,16 +188,16 @@ async function runDownloadTask(taskId, video, format, preferences) {
           return null;
         }
 
-        const browserDownloadId = payload.downloadUrl
-          ? await launchBrowserDownload(payload.downloadUrl, video, format)
-          : null;
-
+        // No second browser download — the bridge already saved the file to
+        // the Youtube Songs folder (and imported MP3s into Apple Music).
         return updateTaskState({
           status: TASK_STATUS.COMPLETE,
           progress: 100,
           message: payload.message || DEFAULT_STRINGS.complete,
           error: "",
-          browserDownloadId
+          browserDownloadId: null,
+          musicImport: payload.musicImport,
+          musicMessage: payload.musicMessage
         });
       }
     });

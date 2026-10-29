@@ -94,8 +94,42 @@
           <button class="wd-secondary-button" data-action="external" ${isBusy ? "disabled" : ""}>External tool</button>
           <button class="wd-secondary-button" data-action="reset-task">${isBusy ? "Reset" : "Clear status"}</button>
         </div>
-        <p class="wd-action-note">${escapeHtml(isBusy ? "Download in progress…" : "Bridge endpoint required for MP3 and MP4 downloads.")}</p>
+        ${isBusy ? `<p class="wd-action-note">Download in progress…</p>` : ""}
       </section>
+    `;
+  }
+
+  function renderMusicRow(taskState) {
+    const st = taskState.musicImport;
+    if (!st || st === "idle") {
+      return "";
+    }
+
+    const note  = Icons.musicNote ? Icons.musicNote(13) : "";
+    const check = Icons.check ? Icons.check(13) : "";
+    const warn  = Icons.alert ? Icons.alert(13) : "";
+
+    let tone = "info";
+    let icon = note;
+    let spin = "";
+    if (st === "added")            { tone = "success"; icon = check; }
+    else if (st === "duplicate")   { tone = "muted";   icon = check; }
+    else if (st === "importing")   { tone = "active";  icon = note; spin = '<span class="wd-panel-music-spinner"></span>'; }
+    else if (st === "skipped")     { tone = "muted";   icon = note; }
+    else if (st === "failed")      { tone = "error";   icon = warn; }
+    else if (st === "needs_permission") { tone = "warn"; icon = warn; }
+
+    const msg = escapeHtml(taskState.musicMessage || "");
+    const canReveal = st === "added" || st === "duplicate";
+    const reveal = canReveal
+      ? `<button class="wd-panel-music-reveal" data-action="reveal-music">In Music anzeigen</button>`
+      : "";
+    return `
+      <div class="wd-panel-music-row wd-panel-music-${tone}" data-music="${escapeHtml(st)}">
+        <span class="wd-panel-music-icon">${spin}${icon}</span>
+        <span class="wd-panel-music-text">${msg}</span>
+        ${reveal}
+      </div>
     `;
   }
 
@@ -117,6 +151,7 @@
           <span class="wd-progress-fill wd-status-${escapeHtml(taskState.status)}" style="width:${progress}%"></span>
         </div>
         <p class="wd-status-copy">${escapeHtml(statusCopy)}</p>
+        ${renderMusicRow(taskState)}
       </section>
     `;
   }
